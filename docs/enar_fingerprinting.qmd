@@ -1,7 +1,7 @@
 ---
 title: "Walking Fingerprinting Using Wrist Accelerometry during Activities of Daily Living in NHANES"
 title-slide-attributes:
-    data-background-image: figs/qr-tinyurl-com.png
+    data-background-image: figs/qr_url.png
     data-background-size: 20%
     data-background-position: 90% 90%
 subtitle: ""
@@ -23,7 +23,7 @@ format:
     html-math-method: mathjax
     embed-resources: true
     logo: figs/bsph.shield.rgb.black.svg
-    footer: tinyurl.com/koff-thesis
+    footer: tinyurl.com/koff-enar25
 code: 
   echo: false
   cache: true 
@@ -973,14 +973,14 @@ p4 + p3n + plot_layout(ncol = 2, widths = c(0.3, 1))
 <br>
 <div style="font-size: 150%;">
 
-- Link to slides: [tinyurl.com/koff-thesis](tinyurl.com/koff-thesis) 
+- Link to slides: [tinyurl.com/koff-thesis](tinyurl.com/koff-enar25) 
 - Email: [lkoffma2@jh.edu](lkoffma2@jh.edu)
 - Website: [lilykoff.com](lilykoff.com)
 - Github: [github.com/lilykoff](github.com/lilykoff)
 </div>
 <br>
 
-![](figs/qr-tinyurl-com_nurl.png){width=35%}
+![](figs/qr.png){width=35%}
 
 ---
 
