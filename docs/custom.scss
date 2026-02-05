@@ -188,3 +188,24 @@ $presentation-font-size-root: 32px;
   opacity: 0.9;
   z-index: 30;
 }
+
+#pdf-viewer {
+  width: 100%; /* Full width */
+  height: 600px; /* Fixed height */
+  overflow: auto; /* Enable scrolling */
+}
+
+canvas {
+  display: block; /* Remove any inline spacing */
+  margin: 0 auto; /* Center canvas */
+}
+
+.navigation {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+.navigation button {
+  margin: 0 5px;
+}

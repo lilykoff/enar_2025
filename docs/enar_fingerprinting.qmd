@@ -159,7 +159,9 @@ cooking = read_rds(here::here("data", "cooking.rds"))
 dens_df = read_rds(here::here("data", "dens_temp_df.rds")) 
 sample_dat2 = read_rds(here::here("data", "fingerprint_data_sample_temporal.rds"))
 
-
+# --- nhanes segments --- # 
+segments = read_csv(here::here("data", "walking_segments.csv.gz"))
+segments_sc = read_csv(here::here("data", "walking_segments_sc.csv.gz"))
 
 # ---- accel data ---- # 
 
@@ -507,6 +509,7 @@ final_plot = nh_img_plot +
 final_plot
 ```
 
+
 # Can we identify someone from their walking pattern measured by a wrist-worn accelerometer in big, free-living datasets? 
   
 
@@ -801,7 +804,7 @@ s1_dens %>% mutate(id = "Person A") %>%
 ---
 
 
-### Ready to fit models
+### Model fitting 
 
 
 ```{r ymat2}
@@ -964,6 +967,127 @@ p4 =
   annotate(geom = "text", x = 1, y = 30, label = "0", size = 12) 
 
 p4 + p3n + plot_layout(ncol = 2, widths = c(0.3, 1)) 
+```
+
+---
+
+### Results in labeled datasets 
+
+:::: {.columns}
+
+::: {.column width="45%"}
+
+**32 individuals, 6 minutes of walking each**
+
+100\% rank-1 accuracy
+[@Koffman2023]
+
+:::
+
+
+::: {.column width="55%"}
+
+**153 individuals, 3 minutes of walking each**
+*Two sessions, at least 1 week apart* 
+
+
+Rank-1 (rank-5) % accuracies 
+
+
++ Train and test on session 1
+  + Logistic regression: 92 (97) 
+  + XGBoost: 93 (99)
+
++ Train on session 1, test on session 2 
+  + Logistic regression: 41 (75)
+  + <span style="color:#009E73;">XGBoost: 58 (78)</span>
+
+
+[@Koffman2024]
+
+:::
+
+::::
+
+---
+
+### NHANES walking identification
+
+```{r walking bouts}
+segments_ad = 
+  segments %>% 
+  group_by(id, day) %>% 
+  summarize(total_seconds = sum(n_seconds),
+            longest_bout = max(n_seconds)) %>% 
+  ungroup() %>% 
+  mutate(method = "adept")
+segments_sc = 
+  segments_sc %>% 
+  group_by(id, day) %>% 
+  summarize(total_seconds = sum(n_seconds),
+            longest_bout = max(n_seconds)) %>% 
+  ungroup() %>% 
+  mutate(method = "stepcount")
+
+total = segments_ad %>% bind_rows(segments_sc)
+
+p1 = total %>% 
+  mutate(method = factor(method, labels = c("ADEPT", "Stepcount"))) %>% 
+  ggplot(aes(x = total_seconds / 60, fill = method)) + 
+  geom_histogram(color = "black") + 
+  facet_wrap(.~method) +
+  scale_x_continuous(limits = c(0, 240),
+                     breaks = seq(0, 240, 30),
+                     labels = seq(0, 4, 0.5)) +
+  labs(y = "Number of participant-days", x = "Hours walking per day",
+       title = "Walking per day and participant by method") +
+  theme(legend.position = "none") +
+  scale_fill_manual(values = c("#A45C98", "#008767")) +
+  scale_y_continuous(limits = c(0, 30000), breaks=seq(0, 30000, 10000))
+
+p2 = total %>% 
+  mutate(method = factor(method, labels = c("ADEPT", "Stepcount"))) %>% 
+  group_by(method, id) %>% 
+  summarize(total = sum(total_seconds), .groups = "drop") %>% 
+  ggplot(aes(x = total / (60 * 60), fill = method)) + 
+  geom_histogram(color = "black") + 
+  facet_wrap(.~method) +
+  scale_x_continuous(limits = c(0, 40),
+                     breaks = seq(0, 40, 10)) +
+  labs(y = "Number of participants", x = "Hours walking",
+       title = "Walking minutes per participant by method") +
+  theme(legend.position = "none") +
+  scale_fill_manual(values = c("#A45C98", "#008767")) +
+  scale_y_continuous(limits = c(0, 3500), breaks=seq(0, 3500, 500))
+
+p1 + p2
+
+```
+
+---
+
+### NHANES walking identification 
+
+```{r}
+total %>% 
+  filter(method == "adept") %>% 
+  group_by(id) %>% 
+  summarize(total = sum(total_seconds),
+            .groups = "drop") %>% 
+  ggplot(aes(x = total / 60)) + 
+  geom_histogram(color = "black", fill = "#A45C98", binwidth = 1) +
+  labs(x = "Minutes walking", y = "Number of participants") +
+  scale_x_continuous(limits = c(0, 180),
+                     breaks = seq(0, 180, 30)) +
+  geom_vline(aes(xintercept = 3), color = "#F56600", linetype = "dashed") +
+  annotate(geom = "label", x = 3, y = 600, hjust = 0,
+           label = "85% of participants have at least\n3 minutes of ADEPT-identified walking",
+           color = "#F56600")
+  labs(y = "Number of participant-days", x = "Hours walking",
+       title = "Walking minutes per participant by method") +
+  theme(legend.position = "none") +
+  scale_fill_manual(values = c("#A45C98", "#008767")) +
+  scale_y_continuous(limits = c(0, 3500), breaks=seq(0, 3500, 500))
 ```
 
 ---
