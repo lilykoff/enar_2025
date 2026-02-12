@@ -70,13 +70,56 @@ get_density = function(x, y, ...) {
   return(dens$z[ii])
 }
 
+make_plot = function(id){
+  wdf = read_rds(here::here("results", "pred_dfs", paste0(id, "_raw_vm.rds"))) %>%
+    mutate(train = if_else(train == TRUE, "train", "test"))
+
+  dens_df =
+    map_dfr(.x = c(12, 24, 36),
+            .f = function(df, lg){
+              df %>%
+                select(second_id, train, vm) %>%
+                group_by(train, second_id) %>%
+                mutate(lag_vm = lag(vm, n = lg)) %>%
+                ungroup() %>%
+                drop_na() %>%
+                mutate(lag = lg)
+            },
+            df = wdf)
+  dens_df =
+    dens_df %>%
+    # group_by(lag, second_id, train) %>%
+    group_by(lag, train) %>%
+    mutate(density = get_density(vm, lag_vm, n = 80)) %>%
+    ungroup()
+
+
+  p = dens_df %>%
+    mutate(train = factor(train, levels = c("train", "test"), labels = c("Training data","Testing data")),
+           lag = case_when(lag == 12 ~ "Lag = 0.15s",
+                           lag == 24 ~ "Lag = 0.30s",
+                           .default = "Lag = 0.45s")) %>%
+    ggplot(aes(x = vm, y = lag_vm, color = density)) +
+    geom_point(size= 1, alpha= .9) +
+    facet_grid(lag~train) +
+    viridis::scale_color_viridis(option = "C") +
+    labs(title = paste0("Participant ", id)) +
+    scale_y_continuous(limits=c(0, 3)) +
+    scale_x_continuous(limits=c(0, 3)) +
+    theme(legend.position = "none", panel.grid = element_blank()) +
+    labs(x = "Acceleration (g)", y = "Lag Acceleration (g)")
+
+    return(p)
+}
+
+
 ```
 
 ```{r ggplot theme}
 #| include: false  
 
 okabe_ito <- c(
-  "#000000", "#CBA052", "#4E97E0", "#008767", #86C8BC 
+  "#000000", "#CBA052", "#4E97E0", "#008767", "#86C8BC", 
   "#F1C400", "#002D72", "#F56600", "#A45C98"
 )
 
@@ -414,6 +457,120 @@ dd99$density = get_density(dd99$vm, dd99$lag_vm, n = 100)
 
 ```
 
+```{r model results processing}
+#| cache: true
+#| include: false 
+
+### accuracies for n=100,n=500
+
+res_100 = c(list.files(here::here("results"), pattern = "*.\\_100.rds"),
+            list.files(here::here("results"), pattern = "*.\\_100fnl.rds"),
+            list.files(here::here("results"), pattern = "*.\\_100nlfnl.rds"),
+            list.files(here::here("results"), pattern = "*.\\_100lasso.rds"),
+            list.files(here::here("results"), pattern = "*.\\_100xgb.rds"),
+            list.files(here::here("results"), pattern = "*.\\_100rf.rds"))
+
+all_100 =
+  map_dfr(res_100,
+          .f = function(x){
+            read_rds(here::here("results", x)) %>%
+              mutate(name = x)
+          }) %>%
+  mutate(
+    type = case_when(
+      sub(".*\\d(.+).rds.*", "\\1", name) == "xgb" ~ "XGBoost",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "long" ~ "Long",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "lasso" ~ "Lasso",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "rf" ~ "Random Forest",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "fnl" ~ "Linear SoFR",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "nlfnl" ~ "Nonlinear SoFR",
+      .default = "Logistic"
+    ),
+    paradigm = case_when(
+      grepl("temporal2", name) ~ "temporal2",
+      grepl("temporal", name) ~ "temporal",
+      .default = "random"
+    )
+  ) %>%
+  filter(paradigm != "temporal")
+
+
+res_500 = c(list.files(here::here("results"), pattern = "*.\\_500.rds"),
+            list.files(here::here("results"), pattern = "*.\\_500fnl.rds"),
+            list.files(here::here("results"), pattern = "*.\\_500nlfnl.rds"),
+            list.files(here::here("results"), pattern = "*.\\_500lasso.rds"),
+            list.files(here::here("results"), pattern = "*.\\_500xgb.rds"),
+            list.files(here::here("results"), pattern = "*.\\_500rf.rds"))
+
+all_500 =
+  map_dfr(res_500,
+          .f = function(x){
+            read_rds(here::here("results", x)) %>%
+              mutate(name = x) %>%
+              mutate(fold = as.numeric(fold))
+          }) %>%
+  mutate(
+    type = case_when(
+      sub(".*\\d(.+).rds.*", "\\1", name) == "xgb" ~ "XGBoost",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "long" ~ "Long",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "lasso" ~ "Lasso",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "rf" ~ "Random Forest",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "fnl" ~ "Linear SoFR",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "nlfnl" ~ "Nonlinear SoFR",
+      .default = "Logistic"
+    ),
+    paradigm = case_when(
+      grepl("temporal2", name) ~ "temporal2",
+      grepl("temporal", name) ~ "temporal",
+      .default = "random"
+    )
+  ) %>%
+  filter(paradigm != "temporal")
+
+
+
+res_logistic = c(list.files(here::here("results"), pattern = "*.\\_100.rds"),
+                 list.files(here::here("results"), pattern = "*.\\_500.rds"),
+                 list.files(here::here("results"), pattern = "*.\\_1000.rds"),
+                 list.files(here::here("results"), pattern = "*.\\_2500.rds"),
+                 list.files(here::here("results"), pattern = "*.\\_5000.rds"),
+                 list.files(here::here("results"), pattern = "*.\\_10000.rds"),
+                 list.files(here::here("results"), pattern = "*.\\_13367.rds"),
+                 list.files(here::here("results"), pattern = "*.\\_10770.rds"))
+
+res_logistic_t2 = res_logistic[grepl("temporal2", res_logistic)]
+res_logistic = res_logistic[!grepl("temporal", res_logistic)]
+
+res_logistic = res_logistic[!grepl("sc", res_logistic)]
+
+res_logistic = c(res_logistic, res_logistic_t2)
+all_logistic =
+  map_dfr(res_logistic,
+          .f = function(x){
+            read_rds(here::here("results", x)) %>%
+              mutate(name = x) %>%
+              mutate(fold = as.numeric(fold))
+          }) %>%
+  mutate(
+    type = case_when(
+      sub(".*\\d(.+).rds.*", "\\1", name) == "xgb" ~ "XGBoost",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "long" ~ "Long",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "lasso" ~ "Lasso",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "rf" ~ "Random Forest",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "fnl" ~ "Linear SoFR",
+      sub(".*\\d(.+).rds.*", "\\1", name) == "nlfnl" ~ "Nonlinear SoFR",
+      .default = "Logistic"
+    ),
+    paradigm = case_when(
+      grepl("temporal2", name) ~ "temporal2",
+      grepl("temporal", name) ~ "temporal",
+      .default = "random"
+    )
+  ) %>%
+  filter(paradigm != "temporal") %>%
+  mutate(across(starts_with("rank"), ~.x / n * 100))
+
+```
 
 ## Introduction: accelerometry data 
 
@@ -467,6 +624,9 @@ plot_grid(img_plot, NULL, align = "v", rel_widths = c(1,1), ncol = 2)
 ## Introduction: accelerometry data 
 
 ```{r accel plot w fig}
+#| cache: true
+
+
 p1a = p1 / p2 / p3 + plot_layout(guides = "collect", axes = "collect")
 
 plot_grid(img_plot, p1a, align = "v", rel_widths = c(1,1), ncol = 2)
@@ -510,7 +670,7 @@ final_plot
 ```
 
 
-# Can we identify someone from their walking pattern measured by a wrist-worn accelerometer in big, free-living datasets? 
+# Can we identify someone from their walking pattern measured by a wrist-worn accelerometer?
   
 
 
@@ -988,6 +1148,7 @@ p4 + p3n + plot_layout(ncol = 2, widths = c(0.3, 1))
 ::: {.column width="55%"}
 
 **153 individuals, 3 minutes of walking each**
+
 *Two sessions, at least 1 week apart* 
 
 
@@ -996,7 +1157,7 @@ Rank-1 (rank-5) % accuracies
 
 + Train and test on session 1
   + Logistic regression: 92 (97) 
-  + XGBoost: 93 (99)
+  + <span style="color:#009E73;">XGBoost: 93 (99)</span>
 
 + Train on session 1, test on session 2 
   + Logistic regression: 41 (75)
@@ -1009,11 +1170,95 @@ Rank-1 (rank-5) % accuracies
 
 ::::
 
+
+# Can we identify someone from their walking pattern measured by a wrist-worn accelerometer in large, unlabeled data sets?
+
 ---
 
-### NHANES walking identification
+
+### NHANES data: recap 
+
++ $>15,000$ participants
++ $7$ days of wrist accelerometry
++ $10$Tb of data 
++ Open source processing pipeline 
++ Publicly available data repository 
++ **First** nationally representative estimate of steps in the US population using open source algorithms
+
+![](figs/physionet.png){width=70%}
+<div style=" position: absolute; bottom: 0.5em; right: -4em; font-size: 0.7em; color: #777; "> @physionet </div>
+
+---
+
+## Walking fingerprinting in NHANES 
+
+<div style="font-size: 150%;">
+
+**Process outline**
+
+
++ Use algorithm to identify walking 
++ Partition data into train/test 
+  + Randomly sample training/testing seconds 
+  + Train on one day, test on later day
++ Fit models 
+
+</div> 
+
+---
+
+### Use algorithms to identify walking 
+
+</br> 
+
+**ADaptive Empirical Pattern Transformation (ADEPT)** [@Karas2019]
+
+<div style="font-size: 1.8em;">
+
+```{r adept}
+#| eval: false
+#| echo: true 
+
+library(adept)
+adept::segmentWalking(
+  xyz, # data frame of tri-axial accelerometry (3 cols)
+  xyz.fs = 100, # sample rate 
+  template = templates # list of templates for pattern matching
+)
+
+
+```
+ 
+</div> 
+
+</br> 
+</br> 
+
+
+**stepcount** [@small2024]
+
+<div style="font-size: 1.8em;">
+
+```{r sc}
+#| eval: false
+#| echo: true 
+
+devtools::install_github("jhuwit/stepcount")
+library(stepcount)
+stepcount::stepcount(file = sample_data, model_type = "ssl")
+```
+
+
+</div>
+
+---
+
+### Use algorithms to identify walking 
 
 ```{r walking bouts}
+#| cache: true 
+
+
 segments_ad = 
   segments %>% 
   group_by(id, day) %>% 
@@ -1021,7 +1266,7 @@ segments_ad =
             longest_bout = max(n_seconds)) %>% 
   ungroup() %>% 
   mutate(method = "adept")
-segments_sc = 
+segments_scs = 
   segments_sc %>% 
   group_by(id, day) %>% 
   summarize(total_seconds = sum(n_seconds),
@@ -1029,10 +1274,30 @@ segments_sc =
   ungroup() %>% 
   mutate(method = "stepcount")
 
-total = segments_ad %>% bind_rows(segments_sc)
+total = segments_ad %>% bind_rows(segments_scs)
+
+ad_pct = 
+  segments_ad %>% 
+  group_by(id) %>% 
+  summarize(total_seconds = sum(total_seconds)) %>% 
+  mutate(min3 = total_seconds >= 60 * 3) %>% 
+  summarize(min3 = sum(min3),
+            n = n(),
+            pct = min3/n * 100) %>% 
+  pull(pct)
+
+sc_pct = 
+  segments_scs %>% 
+  group_by(id) %>% 
+  summarize(total_seconds = sum(total_seconds)) %>% 
+  mutate(min3 = total_seconds >= 60 * 30) %>% 
+  summarize(min3 = sum(min3),
+            n = n(),
+            pct = min3/n * 100) %>% 
+  pull(pct)
 
 p1 = total %>% 
-  mutate(method = factor(method, labels = c("ADEPT", "Stepcount"))) %>% 
+  mutate(method = factor(method, labels = c("ADEPT", "stepcount"))) %>% 
   ggplot(aes(x = total_seconds / 60, fill = method)) + 
   geom_histogram(color = "black") + 
   facet_wrap(.~method) +
@@ -1046,7 +1311,7 @@ p1 = total %>%
   scale_y_continuous(limits = c(0, 30000), breaks=seq(0, 30000, 10000))
 
 p2 = total %>% 
-  mutate(method = factor(method, labels = c("ADEPT", "Stepcount"))) %>% 
+  mutate(method = factor(method, labels = c("ADEPT", "stepcount"))) %>% 
   group_by(method, id) %>% 
   summarize(total = sum(total_seconds), .groups = "drop") %>% 
   ggplot(aes(x = total / (60 * 60), fill = method)) + 
@@ -1055,40 +1320,519 @@ p2 = total %>%
   scale_x_continuous(limits = c(0, 40),
                      breaks = seq(0, 40, 10)) +
   labs(y = "Number of participants", x = "Hours walking",
-       title = "Walking minutes per participant by method") +
+       title = "Walking time per participant by method") +
   theme(legend.position = "none") +
   scale_fill_manual(values = c("#A45C98", "#008767")) +
   scale_y_continuous(limits = c(0, 3500), breaks=seq(0, 3500, 500))
 
-p1 + p2
+p2 = total %>% 
+  mutate(method = factor(method, labels = c("ADEPT", "stepcount"))) %>% 
+  group_by(method, id) %>% 
+  summarize(total = sum(total_seconds), .groups = "drop") %>% 
+  ggplot(aes(x = total / (60 * 60), fill = method)) + 
+  geom_histogram(color = "black") + 
+  facet_wrap(.~method, scales ="free") +
+  labs(y = "Number of participants", x = "Hours walking",
+       title = "Walking time per participant by method") +
+  theme(legend.position = "none") +
+  scale_fill_manual(values = c("#A45C98", "#008767")) +
+  scale_x_continuous(breaks=seq(0, 50, 5))
+
+p2
+
+
+```
+
+
+
+---
+
+### Use algorithms to identify walking 
+
+```{r wb2}
+p2 + 
+  geom_label(data = tibble(method = "ADEPT", total = 10),
+             aes(x = total, y = 4000, label = "85% of participants have at least\n3 minutes of ADEPT-identified walking"), color = "#F56600", size = 4, inherit.aes = FALSE)
 
 ```
 
 ---
 
-### NHANES walking identification 
+### Use algorithms to identify walking 
 
-```{r}
-total %>% 
-  filter(method == "adept") %>% 
-  group_by(id) %>% 
-  summarize(total = sum(total_seconds),
-            .groups = "drop") %>% 
-  ggplot(aes(x = total / 60)) + 
-  geom_histogram(color = "black", fill = "#A45C98", binwidth = 1) +
-  labs(x = "Minutes walking", y = "Number of participants") +
-  scale_x_continuous(limits = c(0, 180),
-                     breaks = seq(0, 180, 30)) +
-  geom_vline(aes(xintercept = 3), color = "#F56600", linetype = "dashed") +
-  annotate(geom = "label", x = 3, y = 600, hjust = 0,
-           label = "85% of participants have at least\n3 minutes of ADEPT-identified walking",
-           color = "#F56600")
-  labs(y = "Number of participant-days", x = "Hours walking",
-       title = "Walking minutes per participant by method") +
-  theme(legend.position = "none") +
-  scale_fill_manual(values = c("#A45C98", "#008767")) +
-  scale_y_continuous(limits = c(0, 3500), breaks=seq(0, 3500, 500))
+```{r wb3}
+p2 + 
+  geom_label(data = tibble(method = "ADEPT", total = 10),
+             aes(x = total, y = 4000, label = "85% of participants have at least\n3 minutes of ADEPT-identified walking"), color = "#F56600", size = 4, inherit.aes = FALSE) +
+  geom_label(data = tibble(method = "stepcount", total = 30),
+             aes(x = total, y = 1000, label = "98% of participants have at least\n30 minutes of stepcount-identified walking"), color = "#F56600", size = 4, inherit.aes = FALSE) 
+
 ```
+
+---
+
+### Partition data into train/test 
+
+
+```{r train test}
+#| cache: true 
+
+
+data2 =
+  tibble(day = c(1, 2, 3, 4),
+         start = c(0, NA, NA, 20),
+         end = c(135,NA, NA, 65),
+         type = c("train", "train", "train", "test"))
+
+df =
+  expand_grid(day = 1:4,
+              minute = 1:180) %>%
+  mutate(rn = row_number())
+
+all_inds = sample(1:720, 180, replace = FALSE)
+train_inds = sample(all_inds, 180*.75, replace = FALSE)
+test_inds = setdiff(all_inds, train_inds)
+
+df =
+  df %>%
+  mutate(type = case_when(
+    rn %in% train_inds ~ "train",
+    rn %in% test_inds ~ "test",
+    .default = NA_character_
+  ),
+  start = if_else(!is.na(type), minute, NA_real_),
+  end = start + 1)
+
+
+p = df %>%
+  mutate(paradigm = "random") %>%
+  bind_rows(data2 %>% mutate(paradigm = "temporal")) %>%
+  mutate(
+    type = factor(type, levels = c("train", "test")),
+    y = as.numeric(factor(paradigm, levels = c("temporal", "random"))),
+    ymin = y - 0.3,
+    ymax = y + 0.3,
+    day = paste0("Day ", day)
+  ) %>%
+  ggplot(aes(xmin = start, xmax = end, ymin = ymin, ymax = ymax, fill = type)) +
+  geom_rect() +
+  scale_y_continuous(breaks = 1:2, expand = c(0.05, 0.05),
+                     labels = c("Temporal", "Random")) +
+  facet_grid(~day) +
+  # scale_y_continuous(limits = c(0, 1), breaks = NULL) +
+  scale_x_continuous(breaks=seq(0,180,60),
+                     labels =seq(0,3,1),
+                     limits=c(0,180)) +
+  labs(x = "Time") +
+  scale_fill_manual(values = c("#4E97E0", "#F56600"), na.translate = FALSE, name = "Data", labels = c("Train", "Test")) +
+  theme(legend.position = "bottom",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.y = element_blank())
+
+
+p
+```
+
+---
+
+
+
+### Fit models
+
+**Questions** 
+
+::: {.incremental}
++ How important is sample size? 
+  + Fit on subgroups of size $n=100$ and entire $N$ 
++ How important is walking identification algorithm accuracy? 
+  + Compare ADEPT, stepcount on same individuals 
++ How important is length of training data? 
+  + Train on 3 min vs. 30 min.
++ How important is train/test partition type? 
+  + Compare random vs. temporal
++ How important is model choice? 
+  + Compare logistic regression, XGBoost, random forest
++ Can we improve logistic regression? 
+  + Weighting, oversampling 
+
+::: 
+
+---
+
+### Sample size 
+
+```{r ss} 
+#| cache: true 
+
+
+lab_df =
+  all_logistic %>%
+  mutate(paradigm = factor(paradigm, labels = c("Random", "Temporal"))) %>%
+  group_by(n, paradigm) %>%
+  summarize(across(starts_with("rank"), median)) %>%
+  pivot_longer(cols = contains("rank"), names_to = "metric", values_to = "value") %>%
+  ungroup() %>%
+  filter(n == 5000) %>%
+  mutate(metric_lab =
+           case_when(metric == "rank1" ~ "Rank 1",
+                     metric == "rank5" ~ "Rank 5",
+                     metric == "rank1pct" ~ "Rank 1%",
+                     .default = "Rank 5%"))
+p = all_logistic %>%
+  mutate(paradigm = factor(paradigm, labels = c("Random", "Temporal"))) %>%
+  group_by(n, paradigm) %>%
+  summarize(across(starts_with("rank"), median)) %>%
+  pivot_longer(cols = contains("rank"), names_to = "metric", values_to = "value") %>%
+  # mutate(name = factor(name, labels = c("Rank 1", "Rank 5"))) %>%
+  ggplot(aes(x = n, y = value, color = metric, group = metric)) +
+  geom_jitter(width = 25, size = 3) +
+  geom_line(linewidth = 1.4) +
+  facet_grid(.~paradigm, scales = "free_x") +
+  scale_x_continuous(breaks=c(100, 500, 1000, 2500, 5000, 10000, 10770, 13367),
+                     labels = c(1, 5, 10, 25, 50, 100, 108, 133)) +
+  scale_y_continuous(breaks=seq(0,100,10)) +
+  theme(panel.grid.minor = element_blank(),
+        legend.position = "none",
+        strip.text = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        legend.title = element_text(size = 14)) +
+  geom_label(data = lab_df,
+             aes(x = n, y = value, label = metric_lab, color = metric),
+             hjust = -.5, size = 4) +
+  labs(x = "Number of Participants (x100)", y = "Median Accuracy") +
+  scale_color_manual(values = c("#F56600", "#CBA052", "#002D72", "#4E97E0"),
+                     labels = c("Rank 1", "Rank 1%", "Rank 5", "Rank 5%"), name = "Metric")
+
+p = all_logistic %>%
+  mutate(paradigm = factor(paradigm, labels = c("Random", "Temporal"))) %>%
+  group_by(n, paradigm) %>%
+  summarize(across(starts_with("rank"), median)) %>%
+  pivot_longer(cols = contains("rank"), names_to = "metric", values_to = "value") %>%
+  filter(paradigm == "Random") %>% 
+  # mutate(name = factor(name, labels = c("Rank 1", "Rank 5"))) %>%
+  ggplot(aes(x = n, y = value, color = metric, group = metric)) +
+  geom_jitter(width = 25, size = 3) +
+  geom_line(linewidth = 1.4) +
+  # facet_grid(.~paradigm, scales = "free_x") +
+  scale_x_continuous(breaks=c(100, 500, 1000, 2500, 5000, 10000, 13367),
+                     labels = c(1, 5, 10, 25, 50, 100,  133)) +
+  scale_y_continuous(breaks=seq(0,100,10)) +
+  theme(panel.grid.minor = element_blank(),
+        legend.position = "none",
+        strip.text = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        legend.title = element_text(size = 14)) +
+  geom_label(data = lab_df %>% filter(paradigm == "Random"),
+             aes(x = n, y = value, label = metric_lab, color = metric),
+             hjust = -.5, size = 4) +
+  labs(x = "Number of Participants (x100)", y = "Median Accuracy",
+       title = "Accuracy by sample size",
+       subtitle = "ADEPT, 3 min of data per ppt, random train/test") +
+  scale_color_manual(values = c("#F56600", "#CBA052", "#002D72", "#4E97E0"),
+                     labels = c("Rank 1", "Rank 1%", "Rank 5", "Rank 5%"), name = "Metric")
+p
+```
+
+
+---
+
+### Algorithm 
+
+```{r algo res}
+#| cache: true 
+# for n = 100, show boxplots of sc vs. adept 
+
+ad_100 = read_rds(here::here("results", "prediction_res_100.rds"))
+sc_100 = read_rds(here::here("results", "prediction_res_scs_100.rds"))
+
+ad_100 %>% 
+  mutate(algorithm = "ADEPT") %>% 
+  bind_rows(sc_100 %>% mutate(algorithm = "stepcount")) %>% 
+  ggplot(aes(x = algorithm, y = rank1, fill = algorithm)) +
+  geom_boxplot(outlier.shape = NA) + 
+  geom_jitter(width = .1, size = .5, alpha = 0.5) +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
+  scale_fill_manual(values = c("#A45C98", "#008767")) +
+  theme(legend.position = "none") + 
+  labs(x = "Algorithm", y = "Rank 1 Accuracy", title = "ADEPT vs. stepcount", subtitle = "3 min of data per ppt, subgroups of n = 100, random train/test") 
+```
+
+---
+
+### Length of data 
+
+```{r length res}
+#| cache: true 
+# for n = 100, show boxplots of sc vs. adept 
+
+ad_100 = read_rds(here::here("results", "prediction_res_100.rds"))
+ad_100_long = read_rds(here::here("results", "prediction_res_100_30min.rds"))
+
+
+ad_100 %>% 
+  mutate(len = "3 min") %>% 
+  bind_rows(ad_100_long %>% mutate(len = "30 min")) %>% 
+  ggplot(aes(x = len, y = rank1, fill = len)) +
+  geom_boxplot(outlier.shape = NA) + 
+  geom_jitter(width = .1, size = .5, alpha = 0.5) +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
+  scale_fill_manual(values = c("#4E97E0", "#002D72")) +
+  theme(legend.position = "none") + 
+  labs(x = "Length of data", y = "Rank 1 Accuracy", title = "3 min vs. 30 min", subtitle = "ADEPT, subgroups of n = 100, random train/test") 
+
+# for n = 100, show boxplots for 3 vs. 30 min, ADEPT only 
+```
+
+---
+
+### Train/test partition 
+
+```{r tt res}
+#| cache: true 
+
+
+# random vs temporal boxplots 
+ad_100 = read_rds(here::here("results", "prediction_res_100.rds"))
+ad_100t = read_rds(here::here("results", "prediction_res_temporal2_100.rds"))
+
+ad_100 %>% 
+  mutate(len = "Random") %>% 
+  bind_rows(ad_100t %>% mutate(len = "Temporal")) %>% 
+  ggplot(aes(x = len, y = rank1, fill = len)) +
+  geom_boxplot(outlier.shape = NA) + 
+  geom_jitter(width = .1, size = .5, alpha = 0.5) +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
+  scale_fill_manual(values = c("#CBA052", "#F56600")) +
+  theme(legend.position = "none") + 
+  labs(x = "Train/test paradigm", y = "Rank 1 Accuracy", title = "Random vs. temporal", subtitle = "ADEPT, subgroups of n = 100, 3 min of data per ppt.") 
+
+```
+
+---
+
+### Model choice 
+
+```{r rf vs log}
+#| cache: true 
+
+
+# boxplots for n =100, n = 500? 
+ad_500 = read_rds(here::here("results", "prediction_res_500.rds"))
+rf_500 = read_rds(here::here("results", "prediction_res_500rf.rds")) %>% 
+  mutate(fold= as.character(fold))
+xgb_500 = read_rds(here::here("results", "prediction_res_500xgb.rds")) %>%
+  mutate(fold= as.character(fold))
+
+ad_100 = read_rds(here::here("results", "prediction_res_100.rds"))
+rf_100 = read_rds(here::here("results", "prediction_res_100rf.rds")) %>% 
+  mutate(fold= as.character(fold))
+xgb_100 = read_rds(here::here("results", "prediction_res_100xgb.rds")) %>%
+  mutate(fold= as.character(fold))
+
+
+res_100 = ad_100 %>% 
+  mutate(len = "Logistic reg.") %>% 
+  bind_rows(rf_100 %>% mutate(len = "Random Forest")) %>% 
+  bind_rows(xgb_100 %>% mutate(len = "XGBoost")) %>% 
+  mutate(n = "n = 100")
+
+res_500 = ad_500 %>% 
+  mutate(len = "Logistic reg.") %>% 
+  bind_rows(rf_500 %>% mutate(len = "Random Forest")) %>% 
+  bind_rows(xgb_500 %>% mutate(len = "XGBoost")) %>% 
+  mutate(n = "n = 500") %>% 
+  mutate(rank1 = rank1 / 500 * 100) 
+
+res_100 %>% 
+  bind_rows(res_500) %>% 
+  ggplot(aes(x = len, y = rank1, fill = len)) +
+  geom_boxplot(outlier.shape = NA) + 
+  facet_grid(.~n) +
+  geom_jitter(width = .1, size = .5, alpha = 0.5) +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
+  scale_fill_manual(values = c("#A45C98", "#86C8BC", "#F1C400")) +
+  theme(legend.position = "none") + 
+  labs(x = "Model", y = "Rank 1 Accuracy", title = "Model choices", subtitle = "ADEPT, 3 min of data per ppt.") 
+
+```
+
+---
+
+### Model improvements 
+
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+
+<style>
+  body {
+    font-family: 'Source Sans Pro', sans-serif;
+    margin: 40px; /* Added margin to body so the big table doesn't hit edges */
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 20px 0;
+    font-size: 35px; /* Increased size by ~50% */
+    text-align: left;
+  }
+  th {
+    border-top: 3px solid #333; /* Made border slightly thicker to match text */
+    border-bottom: 2px solid #333;
+    padding: 16px 12px; /* Increased padding */
+    font-weight: 700;
+  }
+  td {
+    padding: 12px; /* Increased padding */
+    border-bottom: 1px solid #ddd;
+    font-weight: 400;
+  }
+  /* Center align numerical columns */
+  td:nth-child(n+3), th:nth-child(n+3) {
+    text-align: center;
+  }
+  /* Style for the grouping column */
+  .group-header {
+    font-weight: 700;
+    vertical-align: middle;
+    background-color: #f9f9f9;
+    padding-right: 20px;
+  }
+  /* Bottom border for the whole table */
+  tr:last-child td {
+    border-bottom: 3px solid #333;
+  }
+  caption {
+    caption-side: bottom;
+    padding-top: 15px;
+    font-size: 35px; /* Also increased caption size */
+    font-style: italic;
+    color: #666;
+    text-align: left;
+  }
+</style>
+</head>
+<body>
+
+<table>
+  <thead>
+    <tr>
+      <th>Dataset</th>
+      <th>Model</th>
+      <th>Rank 1</th>
+      <th>Rank 1%</th>
+      <th>Rank 5</th>
+      <th>Rank 5%</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="4" class="group-header">Random<br><span style="font-weight:normal; font-style:italic;">(n=13,367)</span></td>
+      <td>Logistic</td>
+      <td>9.7</td>
+      <td>68</td>
+      <td>21</td>
+      <td>93</td>
+    </tr>
+    <tr>
+      <td>Oversampled at 10%</td>
+      <td><strong>41</strong></td>
+      <td>68</td>
+      <td><strong>95</strong></td>
+      <td>99</td>
+    </tr>
+    <tr>
+      <td>Weighted</td>
+      <td>34</td>
+      <td><strong>96</strong></td>
+      <td>61</td>
+      <td><strong>100</strong></td>
+    </tr>
+    <tr>
+      <td>Two-stage</td>
+      <td>20</td>
+      <td>68</td>
+      <td>37</td>
+      <td>93</td>
+    </tr>
+    
+    <tr>
+      <td rowspan="4" class="group-header">Temporal<br><span style="font-weight:normal; font-style:italic;">(n=10,770)</span></td>
+      <td>Logistic</td>
+      <td>0.028</td>
+      <td>26</td>
+      <td>5.1</td>
+      <td>49</td>
+    </tr>
+    <tr>
+      <td>Oversampled at 10%</td>
+      <td>4.3</td>
+      <td><strong>32</strong></td>
+      <td><strong>10</strong></td>
+      <td><strong>52</strong></td>
+    </tr>
+    <tr>
+      <td>Weighted</td>
+      <td>1.8</td>
+      <td>23</td>
+      <td>5.1</td>
+      <td>45</td>
+    </tr>
+    <tr>
+      <td>Two-stage</td>
+      <td><strong>5.2</strong></td>
+      <td>26</td>
+      <td>10</td>
+      <td>49</td>
+    </tr>
+  </tbody>
+  <caption>
+    Rank 1, rank 1%, rank 5, rank 5% accuracies of different model types on the entire population for each model. The best model in each category is bolded.
+  </caption>
+</table>
+
+
+---
+
+### Fingerprints
+
+```{r fprints}
+#| cache: true 
+
+
+plot_list = map(.x = c(82367, 78466, 66810, 79001, 79235), .f = make_plot)
+
+p1 = plot_list[[1]] + plot_list[[2]] + plot_list[[3]]  +
+  plot_layout(nrow = 1, axes = 'collect') + plot_annotation(title = "Well-Predicted Participants")
+p1 
+```
+
+---
+
+### Fingerprints 
+
+```{r fp2}
+#| cache: true 
+
+
+plot_list2 = map(.x = c(69878, 72735, 65584, 73266, 72232), .f = make_plot)
+
+p2 = plot_list2[[1]] + plot_list2[[2]] + plot_list2[[3]]  +
+  plot_layout(nrow = 1, axes = 'collect') + plot_annotation(title = "Poorly-Predicted Participants")
+p2
+```
+
+
+---
+
+## Summary and future directions 
 
 ---
 
