@@ -102,7 +102,7 @@ make_plot = function(id){
     ggplot(aes(x = vm, y = lag_vm, color = density)) +
     geom_point(size= 1, alpha= .9) +
     facet_grid(lag~train) +
-    viridis::scale_color_viridis(option = "C") +
+    viridis::scale_color_viridis(option = "B") +
     labs(title = paste0("Participant ", id)) +
     scale_y_continuous(limits=c(0, 3)) +
     scale_x_continuous(limits=c(0, 3)) +
@@ -1139,7 +1139,7 @@ p4 + p3n + plot_layout(ncol = 2, widths = c(0.3, 1))
 
 **32 individuals, 6 minutes of walking each**
 
-100\% rank-1 accuracy
+100\% rank-1 accuracy 
 [@Koffman2023]
 
 :::
@@ -1196,13 +1196,11 @@ Rank-1 (rank-5) % accuracies
 
 **Process outline**
 
-
+::: {.incremental}
 + Use algorithm to identify walking 
 + Partition data into train/test 
-  + Randomly sample training/testing seconds 
-  + Train on one day, test on later day
 + Fit models 
-
+:::
 </div> 
 
 ---
@@ -1804,9 +1802,7 @@ res_100 %>%
 ### Fingerprints
 
 ```{r fprints}
-#| cache: true 
-
-
+#| cache: true
 plot_list = map(.x = c(82367, 78466, 66810, 79001, 79235), .f = make_plot)
 
 p1 = plot_list[[1]] + plot_list[[2]] + plot_list[[3]]  +
@@ -1819,9 +1815,7 @@ p1
 ### Fingerprints 
 
 ```{r fp2}
-#| cache: true 
-
-
+#| cache: true
 plot_list2 = map(.x = c(69878, 72735, 65584, 73266, 72232), .f = make_plot)
 
 p2 = plot_list2[[1]] + plot_list2[[2]] + plot_list2[[3]]  +
@@ -1832,8 +1826,24 @@ p2
 
 ---
 
-## Summary and future directions 
+## Summary 
+<br> 
+<div style="font-size: 150%;">
 
++ We can identify individuals from their walking patterns in large, unlabeled datasets using predictors derived from acceleration, lag acceleration
++ Performance depends on sample size, walking identification algorithm, train/test partition, length of training data, model choice 
++ Preprint on arXiv [@nhanes_fprint]
+</div>
+
+---
+
+## Future directions 
+
+<br> 
+<div style="font-size: 150%;">
++ Using CNN/deep learning models 
++ Using fingerprint as the outcome instead of predictor, investigating change over time or association with health status/mortality 
+</div>
 ---
 
 ## Thank you!
@@ -1841,7 +1851,7 @@ p2
 <br>
 <div style="font-size: 150%;">
 
-- Link to slides: [tinyurl.com/koff-thesis](tinyurl.com/koff-enar25) 
+- Link to slides: [tinyurl.com/koff-enar25](tinyurl.com/koff-enar25) 
 - Email: [lkoffma2@jh.edu](lkoffma2@jh.edu)
 - Website: [lilykoff.com](lilykoff.com)
 - Github: [github.com/lilykoff](github.com/lilykoff)
