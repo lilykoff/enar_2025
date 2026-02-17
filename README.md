@@ -6,7 +6,10 @@ Tuesday | 3/17/2025 | 3:00-3:15 PM
 Session 86 | Contributed Papers: Dynamic Modeling Approaches for Longitudinal Data
 
 [Link to presentation](https://lilykoff.github.io/enar_2025/enar_fingerprinting.html)
+
 [Link to manuscript](https://arxiv.org/abs/2506.17160)
+
+[Link to lightning talk](https://lilykoff.github.io/enar_2025/enar_lightning.html)
 
 **Walking Fingerprinting Using Wrist Accelerometry during Activities of Daily Living in NHANES**
 
