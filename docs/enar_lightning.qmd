@@ -501,6 +501,27 @@ dens_res8 = map_dfr(.x = seq(5, 99, 10),
   mutate(across(c(vm, lag_vm), ~if_else(.x > 3 | .x < 0, NA, .x)))
 ```
 
+```{r hemo data}
+#| cache: true
+#| include: false 
+
+# --- hemo data ---- # 
+hemo_data0 = read_csv(here::here("data", "1156602.csv.gz")) %>% filter(cat_anes == "intra")
+
+hemo_data = read_csv(here::here("data", "1004841.csv.gz")) %>% 
+  filter(cat_anes == "intra")
+
+# ---- hemo results --- # 
+mean_preds = read_rds(here::here("data", "mean_preds_xgb.rds"))
+
+pred_res = read_rds(here::here("data", "pred_res_df_xgb.rds"))
+
+
+correct = pred_res %>% 
+  filter(rank1 == 1)
+
+```
+
 
 ## Introduction: accelerometry data 
 
@@ -909,8 +930,6 @@ s1_dens %>% mutate(id = "Person A") %>%
 
 
 ```{r s41}
-#| fig-width: 7
-#| fig-height: 4
 #| cache: true
 #| out-width: "100%"
 
@@ -943,16 +962,16 @@ plot_ly(
 ```
 
 
+:::
 
+::: {.column width="50%"}
 
-```{r s42}
-#| fig-width: 7
-#| fig-height: 4
+```{r s43}
 #| cache: true
 #| out-width: "100%"
 
 plot_ly(
-  dens_res6,
+  dens_res7,
   x = ~vm,
   y = ~lag_vm,
   z = ~lag,
@@ -979,48 +998,11 @@ plot_ly(
 
 ```
 
-:::
-
-::: {.column width="50%"}
-
-```{r s43}
-#| fig-width: 7
-#| fig-height: 4
-#| cache: true
-#| out-width: "100%"
-
-plot_ly(
-  dens_res7,
-  x = ~vm,
-  y = ~lag_vm,
-  z = ~lag,
-  color = ~density,
-  colors = viridis::viridis(100, option = "B"),
-  type = "scatter3d",
-  mode = "markers",
-  marker = list(size = 1, opacity = 0.5) 
-) %>%
-  colorbar(title = "Density") %>%
-  layout(
-    title = list(text = "Predictor for person C", y = 0.95),
-    # INCREASE margins here to prevent label clipping
-    margin = list(l = 80, r = 80, b = 80, t = 0), 
-    scene = list(
-      xaxis = list(title = "Acceleration (g)"),
-      yaxis = list(title = "Lag Acceleration (g)"),
-      zaxis = list(title = "Lag (s)")
-      # Optional: Adjust camera to zoom out slightly if labels still clip
-      # camera = list(eye = list(x = 1.5, y = 1.5, z = 1.5))
-    )
-  )
-
-
-```
-
 ```{r s44}
+#| include: false
+#| eval: false
 #| fig-width: 7
 #| fig-height: 4
-#| cache: true
 #| out-width: "100%"
 
 plot_ly(
@@ -1084,9 +1066,282 @@ p2 = plot_list2[[1]] + plot_list2[[2]] + plot_list2[[3]]  +
 p2
 ```
 
----
+
 
 # What about other data sources? 
+
+---
+
+### Arterial waveform 
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+![](figs/a_line.png){.equalheight}
+
+:::
+
+
+::: {.column width="50%"}
+
+
+![](figs/abp4.png){.equalheight}
+:::
+
+::::
+
+---
+
+### Arterial waveform 
+
+```{r abp 2 pts}
+#| cache: true 
+
+
+start = 5000
+
+inds = c(5001.3, 5002.35, 5003.35, 5004.3, 
+5005.4, 5006.4, 5007.4,
+5008.4, 5009.45)
+
+hd0 = hemo_data0 %>% 
+  mutate(floor_sec = floor(relative_time_sec)) %>% 
+  filter(floor_sec >= start & floor_sec < start + 10) %>% 
+  mutate(beat_id = case_when(
+      relative_time_sec <= inds[1] ~ 1,
+      relative_time_sec <= inds[2] ~ 2,
+      relative_time_sec <= inds[3] ~ 3,
+      relative_time_sec <= inds[4] ~ 4,
+      relative_time_sec <= inds[5] ~ 5,
+      relative_time_sec <= inds[6] ~ 6,
+      relative_time_sec <= inds[7] ~ 7,
+      relative_time_sec <= inds[8] ~ 8,
+      relative_time_sec <= inds[9] ~ 9,
+      .default = 10
+  ))
+p0 =
+  hd0 %>% 
+  ggplot(aes(x = relative_time_sec, y = abp, color = factor(beat_id))) +
+  geom_line(linewidth = 1.1) +
+  scale_x_continuous(breaks = seq(start, start + 10, 1),
+                     labels = seq(0, 10, 1)) +
+  scale_color_viridis_d(option = "B", name = "") +
+  theme(legend.position = "none") +
+  scale_y_continuous(limits=c(48, 120), breaks=seq(50,120,10)) +
+  labs(x = "Time (s)", y = "Arterial Blood Pressure (mmHg)",
+       title = "10s of Arterial Waveform", 
+       subtitle = "Patient 1")
+
+inds2 = c(5001.2, 5002.2, 5003.25,5004.35, 5005.4, 5006.4, 5007.45, 5008.5, 5009.51 )
+hd1 = 
+  hemo_data %>% 
+  mutate(floor_sec = floor(relative_time_sec)) %>% 
+  filter(floor_sec >= start & floor_sec < start + 10) %>% 
+  mutate(beat_id = case_when(
+      relative_time_sec <= inds2[1] ~ 1,
+      relative_time_sec <= inds2[2] ~ 2,
+      relative_time_sec <= inds2[3] ~ 3,
+      relative_time_sec <= inds2[4] ~ 4,
+      relative_time_sec <= inds2[5] ~ 5,
+      relative_time_sec <= inds2[6] ~ 6,
+      relative_time_sec <= inds2[7] ~ 7,
+      relative_time_sec <= inds2[8] ~ 8,
+      relative_time_sec <= inds2[9] ~ 9,
+      .default = 10
+  ))
+  
+p1 = 
+  hd1 %>% 
+  ggplot(aes(x = relative_time_sec, y = abp, color = factor(beat_id))) +
+  geom_line(linewidth = 1.1) +
+  scale_x_continuous(breaks = seq(start, start + 10, 1),
+                     labels = seq(0, 10, 1)) +
+  scale_color_viridis_d(option = "B", name = "") +
+  theme(legend.position = "none") +
+  scale_y_continuous(limits=c(48, 120), breaks=seq(50,120,10)) +
+  labs(x = "Time (s)", y = "Arterial Blood Pressure (mmHg)",
+       title = "10s of Arterial Waveform", subtitle = "Patient 2")
+#   hemo_data %>% 
+#   mutate(floor_sec = floor(relative_time_sec)) %>% 
+#   filter(floor_sec >= start & floor_sec < start + 10) %>% 
+#   ggplot(aes(x = relative_time_sec, y = abp)) +
+#   geom_line(linewidth = 1.1) +
+# # scale_x_continuous(breaks=seq(5000, 5010, .5))
+#   scale_x_continuous(breaks = seq(start, start + 10, 1),
+#                      labels = seq(0, 10, 1)) +
+#     scale_y_continuous(limits=c(48, 120), breaks=seq(50,120,10)) +
+#   labs(x = "Time (s)", y = "Arterial Blood Pressure (mmHg)",
+#        title = "10s of Arterial Waveform", 
+#        subtitle = "Patient 2")
+
+p0 + p1
+```
+
+---
+
+### Fingerprinting with arterial waveform
+
+```{r fprint waveform1}
+#| cache: true
+x = hemo_data %>%
+  filter(cat_cpb %in% c("pre", "post") & cat_anes == "intra") %>%
+  mutate(time = floor_date(time, unit = "seconds"))
+
+seconds = unique(x$time)
+set.seed(123)
+sec_sample = sample(seconds, 10 * 60, replace = FALSE)
+dens_df =
+ x %>% 
+ filter(time %in% sec_sample) %>% 
+ mutate(cat_cpb = factor(cat_cpb, labels = c("Post-CPB", "Pre-CPB")),
+        cat_cpb = forcats::fct_rev(cat_cpb)) %>% 
+ group_by(time, cat_cpb) %>%
+ mutate(lag_abp = lag(abp, n = 18)) %>%
+ ungroup()  %>%
+ drop_na()
+
+dens_df$density = get_density(dens_df$abp, dens_df$lag_abp, n = 120 - 18)
+  
+dens_df2 =
+ x %>% 
+ filter(time %in% sec_sample) %>% 
+ mutate(cat_cpb = factor(cat_cpb, labels = c("Post-CPB", "Pre-CPB")),
+        cat_cpb = forcats::fct_rev(cat_cpb)) %>% 
+ group_by(time, cat_cpb) %>%
+ mutate(lag_abp = lag(abp, n = 36)) %>%
+ ungroup()  %>%
+ drop_na()
+
+dens_df2$density = get_density(dens_df2$abp, dens_df2$lag_abp, n = 120 - 36)
+
+dens_df3 =
+ x %>% 
+ filter(time %in% sec_sample) %>% 
+ mutate(cat_cpb = factor(cat_cpb, labels = c("Post-CPB", "Pre-CPB")),
+        cat_cpb = forcats::fct_rev(cat_cpb)) %>% 
+ group_by(time, cat_cpb) %>%
+ mutate(lag_abp = lag(abp, n = 54)) %>%
+ ungroup()  %>%
+ drop_na()
+
+dens_df3$density = get_density(dens_df3$abp, dens_df3$lag_abp, n = 120 - 54)
+  
+pt1 = dens_df %>% 
+  mutate(lag = "Lag = 0.15s") %>% 
+  bind_rows(dens_df2 %>% mutate(lag = "Lag = 0.30s")) %>% 
+  bind_rows(dens_df3 %>% mutate(lag = "Lag = 0.45s")) %>% 
+  ggplot(aes(x=abp, y = lag_abp, group = time, color = density)) +
+  facet_grid(lag~.) +
+  geom_point(size = .5, alpha = .1) +
+  scale_color_viridis(name = "Density", option = "B") +
+  labs(x = "ABP (mmHg)", y = "Lag ABP (mmHg)", title = "Fingerprint",  subtitle = "Patient 1") +
+  scale_x_continuous(limits = c(40,150)) +
+  scale_y_continuous(limits = c(40,150)) 
+  
+```
+
+
+
+```{r fprint waveform2}
+#| cache: true
+x = hemo_data0 %>%
+  filter(cat_cpb %in% c("pre", "post") & cat_anes == "intra") %>%
+  mutate(time = floor_date(time, unit = "seconds"))
+
+seconds = unique(x$time)
+set.seed(123)
+sec_sample = sample(seconds, 10 * 60, replace = FALSE)
+dens_df =
+ x %>% 
+ filter(time %in% sec_sample) %>% 
+ mutate(cat_cpb = factor(cat_cpb, labels = c("Post-CPB", "Pre-CPB")),
+        cat_cpb = forcats::fct_rev(cat_cpb)) %>% 
+ group_by(time, cat_cpb) %>%
+ mutate(lag_abp = lag(abp, n = 18)) %>%
+ ungroup()  %>%
+ drop_na()
+
+dens_df$density = get_density(dens_df$abp, dens_df$lag_abp, n = 120 - 18)
+  
+dens_df2 =
+ x %>% 
+ filter(time %in% sec_sample) %>% 
+ mutate(cat_cpb = factor(cat_cpb, labels = c("Post-CPB", "Pre-CPB")),
+        cat_cpb = forcats::fct_rev(cat_cpb)) %>% 
+ group_by(time, cat_cpb) %>%
+ mutate(lag_abp = lag(abp, n = 36)) %>%
+ ungroup()  %>%
+ drop_na()
+
+dens_df2$density = get_density(dens_df2$abp, dens_df2$lag_abp, n = 120 - 36)
+
+dens_df3 =
+ x %>% 
+ filter(time %in% sec_sample) %>% 
+ mutate(cat_cpb = factor(cat_cpb, labels = c("Post-CPB", "Pre-CPB")),
+        cat_cpb = forcats::fct_rev(cat_cpb)) %>% 
+ group_by(time, cat_cpb) %>%
+ mutate(lag_abp = lag(abp, n = 54)) %>%
+ ungroup()  %>%
+ drop_na()
+
+dens_df3$density = get_density(dens_df3$abp, dens_df3$lag_abp, n = 120 - 54)
+  
+pt2 = dens_df %>% 
+  mutate(lag = "Lag = 0.15s") %>% 
+  bind_rows(dens_df2 %>% mutate(lag = "Lag = 0.30s")) %>% 
+  bind_rows(dens_df3 %>% mutate(lag = "Lag = 0.45s")) %>% 
+  ggplot(aes(x=abp, y = lag_abp, group = time, color = density)) +
+  facet_grid(lag~.) +
+  geom_point(size = .5, alpha = .1) +
+  scale_color_viridis(name = "Density", option = "B") +
+  labs(x = "ABP (mmHg)", y = "Lag ABP (mmHg)", title = "Fingerprint",  subtitle = "Patient 2") +
+  scale_x_continuous(limits = c(40, 150)) +
+  scale_y_continuous(limits = c(40, 150))
+
+pt1 + pt2
+  
+```
+
+---
+
+
+### Fingerprinting with arterial waveform
+
+```{r xgb accuracy}
+#| cache: true
+mean_preds %>% 
+  mutate(correct = 
+           if_else(true_subject == model & true_subject %in% correct$true_subject, 1, 0)) %>% 
+  ggplot(aes(x = factor(true_subject), y = mean_pred, color = factor(correct))) + 
+  geom_jitter(width = .1, size = .75, alpha = 0.5) +
+  theme(legend.position = "bottom",
+        axis.text.x = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        legend.text = element_text(size = 14),
+        legend.title = element_text(size = 15)) +
+  scale_color_manual(values = c("#CC79A7", "#009E73"),
+                     labels = c("Models trained for other patients", "Model trained for correct patient"),
+                     name = "Prediction from:") + 
+  labs(x = "Patient", y = "Predicted Probability",
+       title = "Predicted Probabilities from XGBoost Model",
+       subtitle = "94% rank-1, 99% rank-5 accuracy on test set") +
+  guides(color = guide_legend(override.aes = list(size = 4, alpha = 1))) +
+  scale_y_continuous(breaks = seq(0, 0.7, 0.1)) +
+  annotate(geom = "text",
+           color = "#444444",
+           hjust = 0,
+           label = "Green point above pink points in each column\nindicates correct identification",
+           x = "325", y = 0.59) +
+  geom_segment(xend = "272", x = "325", y = 0.6, yend = 0.6,
+    arrow = arrow(length = unit(0.1, "inches"), type = "closed"),
+    color = "#444444",
+    linewidth = .5)
+
+
+```
 
 ---
 
