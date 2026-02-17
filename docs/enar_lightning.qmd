@@ -1,0 +1,1114 @@
+---
+title: "Fingerprinting with high-resolution wearable device data"
+subtitle: ""
+author: "Lily Koffman"
+institute: "Department of Biostatistics, Johns Hopkins School of Public Health" 
+format:
+  revealjs:
+    theme: custom.scss
+    slide-number: true
+    toc: false
+    progress: true
+    hash: true
+    overview: true
+    code-overflow: wrap
+    code-line-numbers: false
+    center: false
+    width: 1400
+    height: 850
+    html-math-method: mathjax
+    embed-resources: true
+    logo: figs/bsph.shield.rgb.black.svg
+    footer: tinyurl.com/koff-enar25
+code: 
+  echo: false
+  cache: true 
+editor_options: 
+  chunk_output_type: console
+bibliography: references.bib
+---
+
+```{r load packages}
+#| include: false 
+
+library(patchwork)
+library(tidyverse)
+library(ggridges)
+library(paletteer)
+library(viridis)
+library(geomtextpath)
+library(showtext)
+library(scales)
+library(ggplot2)
+library(ggrepel)
+library(broom)
+library(mgcv)
+library(survival)
+library(ggimage)
+library(cowplot)
+library(plotly)
+options(digits.secs = 3)
+
+```
+
+```{r misc functions}
+#| include: false 
+
+# https://brand.jhu.edu/visual-identity/colors/
+range_left = function(x, left, right){
+  ifelse(x > left & x <= right, TRUE, FALSE)
+}
+
+get_density = function(x, y, ...) {
+  dens <- MASS::kde2d(x, y, ...)
+  ix <- findInterval(x, dens$x)
+  iy <- findInterval(y, dens$y)
+  ii <- cbind(ix, iy)
+  return(dens$z[ii])
+}
+
+make_plot = function(id){
+  wdf = read_rds(here::here("results", "pred_dfs", paste0(id, "_raw_vm.rds"))) %>%
+    mutate(train = if_else(train == TRUE, "train", "test"))
+
+  dens_df =
+    map_dfr(.x = c(12, 24, 36),
+            .f = function(df, lg){
+              df %>%
+                select(second_id, train, vm) %>%
+                group_by(train, second_id) %>%
+                mutate(lag_vm = lag(vm, n = lg)) %>%
+                ungroup() %>%
+                drop_na() %>%
+                mutate(lag = lg)
+            },
+            df = wdf)
+  dens_df =
+    dens_df %>%
+    # group_by(lag, second_id, train) %>%
+    group_by(lag, train) %>%
+    mutate(density = get_density(vm, lag_vm, n = 80)) %>%
+    ungroup()
+
+
+  p = dens_df %>%
+    mutate(train = factor(train, levels = c("train", "test"), labels = c("Training data","Testing data")),
+           lag = case_when(lag == 12 ~ "Lag = 0.15s",
+                           lag == 24 ~ "Lag = 0.30s",
+                           .default = "Lag = 0.45s")) %>%
+    ggplot(aes(x = vm, y = lag_vm, color = density)) +
+    geom_point(size= 1, alpha= .9) +
+    facet_grid(lag~train) +
+    viridis::scale_color_viridis(option = "B") +
+    labs(title = paste0("Participant ", id)) +
+    scale_y_continuous(limits=c(0, 3)) +
+    scale_x_continuous(limits=c(0, 3)) +
+    theme(legend.position = "none", panel.grid = element_blank()) +
+    labs(x = "Acceleration (g)", y = "Lag Acceleration (g)")
+
+    return(p)
+}
+
+
+```
+
+```{r ggplot theme}
+#| include: false  
+
+okabe_ito <- c(
+  "#000000", "#CBA052", "#4E97E0", "#008767", "#86C8BC", 
+  "#F1C400", "#002D72", "#F56600", "#A45C98"
+)
+
+
+showtext_auto()
+font_add_google("Source Sans 3", "Source Sans Pro")
+
+# JHU palette (subset)
+jhu_primary <- c(
+  heritage_blue = "#002D72",
+  spirit_blue   = "#68ACE5",
+  medium_blue   = "#0077D8",
+  harbor_blue   = "#4E97E0",
+  gold          = "#F1C400"
+)
+
+theme_set(
+  theme_minimal(base_family = "Source Sans Pro") +
+    theme(
+      plot.background = element_rect(fill = "white", color = NA),
+      panel.background = element_rect(fill = "white", color = NA),
+
+      panel.grid.major = element_line(color = "#E6E6E6"),
+      panel.grid.minor = element_blank(),
+
+      axis.text = element_text(color = "#31261D", size = 12),
+      axis.title = element_text(color = "#31261D", size = 14),
+
+      plot.title = element_text(
+        face = "bold",
+        size = 18,
+        color = jhu_primary["spirit_blue"]
+      ),
+      plot.subtitle = element_text(
+        size = 14,
+        color = "#444444"
+      ),
+
+      strip.background = element_rect(
+        fill = jhu_primary["heritage_blue"],
+        color = NA
+      ),
+      strip.text = element_text(color = "white", size = 12),
+
+      legend.title = element_text(color = "#31261D"),
+      legend.text = element_text(color = "#31261D")
+    )
+)
+
+# Discrete scales
+scale_color_jhu <- function(...) {
+  scale_color_manual(
+    values = unname(jhu_primary[c("medium_blue", "harbor_blue", "spirit_blue", "gold")]),
+    ...
+  )
+}
+
+scale_fill_jhu <- function(...) {
+  scale_fill_manual(
+    values = unname(jhu_primary[c("medium_blue", "harbor_blue", "spirit_blue", "gold")]),
+    ...
+  )
+}
+
+
+```
+
+
+```{r data read in and processing}
+#| cache: true 
+#| include: false
+
+# --- accel data ----- # 
+walking = read_rds(here::here("data", "walking.rds"))
+driving = read_rds(here::here("data", "driving.rds"))
+cooking = read_rds(here::here("data", "cooking.rds"))
+
+
+# --- nh fprint ---- # 
+dens_df = read_rds(here::here("data", "dens_temp_df.rds")) 
+sample_dat2 = read_rds(here::here("data", "fingerprint_data_sample_temporal.rds"))
+
+# --- nhanes segments --- # 
+segments = read_csv(here::here("data", "walking_segments.csv.gz"))
+segments_sc = read_csv(here::here("data", "walking_segments_sc.csv.gz"))
+
+# ---- accel data ---- # 
+
+data = read_csv(here::here("data", "df_all_IU.csv"))
+
+iu_dat =
+  data %>%
+  rename(vm = signal_lw)
+
+df =
+  iu_dat %>%
+  filter(between(time, 200, 201), ID2 == 4) %>%
+  mutate(lag_vm = lag(vm, n = 15)) %>%
+  mutate(time = time - min(time))
+
+df30 =
+  iu_dat %>%
+  filter(between(time, 200, 201), ID2 == 4) %>%
+  mutate(lag_vm = lag(vm, n = 30)) %>%
+  mutate(time = time - min(time))
+
+df2 =
+  iu_dat %>%
+  filter(between(time, 201, 202), ID2 == 4) %>%
+  mutate(lag_vm = lag(vm, n = 15)) %>%
+  mutate(time = time - min(time))
+
+df2_30 =
+  iu_dat %>%
+  filter(between(time, 201, 202), ID2 == 4) %>%
+  mutate(lag_vm = lag(vm, n = 30)) %>%
+  mutate(time = time - min(time))
+
+df3 =
+  iu_dat %>%
+  filter(between(time, 101, 102), ID2 == 2) %>%
+  mutate(lag_vm = lag(vm, n = 15)) %>%
+  mutate(time = time - min(time))
+
+df3_30 =
+  iu_dat %>%
+  filter(between(time, 101, 102), ID2 == 2) %>%
+  mutate(lag_vm = lag(vm, n = 30)) %>%
+  mutate(time = time - min(time))
+
+df3_302 =
+  iu_dat %>%
+  filter(between(time, 102, 103), ID2 == 2) %>%
+  mutate(lag_vm = lag(vm, n = 30)) %>%
+  mutate(time = time - min(time))
+
+df3_152 =
+  iu_dat %>%
+  filter(between(time, 102, 103), ID2 == 2) %>%
+  mutate(lag_vm = lag(vm, n = 15)) %>%
+  mutate(time = time - min(time))
+
+df4 =
+  iu_dat %>%
+  filter(between(time, 201, 202), ID2 == 6) %>%
+  mutate(lag_vm = lag(vm, n = 15)) %>%
+  mutate(time = time - min(time))
+
+# ------- densities -------- # 
+dens_df_s2_l15 =
+  iu_dat %>%
+  filter(ID2 == 2) %>% 
+  mutate(time = (row_number() / 100) - 0.01) %>%
+  mutate(s = floor(time)) %>%
+  filter(s <= 240) %>%
+  group_by(s) %>%
+  mutate(lag_vm = lag(vm, n = 15)) %>%
+  ungroup()  %>%
+  drop_na()
+
+dens_df_s2_l15$density = get_density(dens_df_s2_l15$vm, dens_df_s2_l15$lag_vm, n = 100)
+
+dens_df_s2_l30 =
+  iu_dat %>%
+  filter(ID2 == 2) %>% 
+  mutate(time = (row_number() / 100) - 0.01) %>%
+  mutate(s = floor(time)) %>%
+  filter(s <= 240) %>%
+  group_by(s) %>%
+  mutate(lag_vm = lag(vm, n = 30)) %>%
+  ungroup()  %>%
+  drop_na()
+
+dens_df_s2_l30$density = get_density(dens_df_s2_l30$vm, dens_df_s2_l30$lag_vm, n = 100)
+
+dens_df_s4_l15 =
+  iu_dat %>%
+  filter(ID2 == 4) %>% 
+  mutate(time = (row_number() / 100) - 0.01) %>%
+  mutate(s = floor(time)) %>%
+  filter(s <= 240) %>%
+  group_by(s) %>%
+  mutate(lag_vm = lag(vm, n = 15)) %>%
+  ungroup()  %>%
+  drop_na()
+
+dens_df_s4_l15$density = get_density(dens_df_s4_l15$vm, dens_df_s4_l15$lag_vm, n = 100)
+
+dens_df_s4_l30 =
+  iu_dat %>%
+  filter(ID2 == 4) %>% 
+  mutate(time = (row_number() / 100) - 0.01) %>%
+  mutate(s = floor(time)) %>%
+  filter(s <= 240) %>%
+  group_by(s) %>%
+  mutate(lag_vm = lag(vm, n = 30)) %>%
+  ungroup()  %>%
+  drop_na()
+
+dens_df_s4_l30$density = get_density(dens_df_s4_l30$vm, dens_df_s4_l30$lag_vm, n = 100)
+
+dens_df_s6_l15 =
+  iu_dat %>%
+  filter(ID2 == 6) %>% 
+  mutate(time = (row_number() / 100) - 0.01) %>%
+  mutate(s = floor(time)) %>%
+  filter(s <= 240) %>%
+  group_by(s) %>%
+  mutate(lag_vm = lag(vm, n = 15)) %>%
+  ungroup()  %>%
+  drop_na()
+
+dens_df_s6_l15$density = get_density(dens_df_s6_l15$vm, dens_df_s6_l15$lag_vm, n = 100)
+
+dens_df_s6_l30 =
+  iu_dat %>%
+  filter(ID2 == 6) %>% 
+  mutate(time = (row_number() / 100) - 0.01) %>%
+  mutate(s = floor(time)) %>%
+  filter(s <= 240) %>%
+  group_by(s) %>%
+  mutate(lag_vm = lag(vm, n = 30)) %>%
+  ungroup()  %>%
+  drop_na()
+
+dens_df_s6_l30$density = get_density(dens_df_s6_l30$vm, dens_df_s6_l30$lag_vm, n = 100)
+
+### more densities 
+
+get_dens = function(lag_tmp, id = 2){
+  dd =
+    iu_dat %>%
+    filter(ID2 == id) %>% 
+    mutate(time = (row_number() / 100) - 0.01) %>%
+    mutate(s = floor(time)) %>%
+    filter(s <= 240) %>%
+    group_by(s) %>%
+    mutate(lag_vm = lag(vm, n = lag_tmp)) %>%
+    ungroup()  %>%
+    drop_na()
+  
+  dd$density = get_density(dd$vm, dd$lag_vm, n = 100)
+  return(dd %>% mutate(lag = lag_tmp))
+}
+
+dens_res = map_dfr(.x = seq(5, 99, 10),
+                   .f = get_dens) %>% 
+  mutate(lag = lag / 100) %>% 
+  mutate(across(c(vm, lag_vm), ~if_else(.x > 3 | .x < 0, NA, .x)))
+
+dens_res6 = map_dfr(.x = seq(5, 99, 10),
+                   .f = get_dens,
+                   id = 6) %>% 
+  mutate(lag = lag / 100) %>% 
+  mutate(across(c(vm, lag_vm), ~if_else(.x > 3 | .x < 0, NA, .x)))
+
+
+get_dens2 = function(lag_tmp){
+  dd =
+    iu_dat %>%
+    filter(ID2 == 2) %>% 
+    mutate(time = (row_number() / 100) - 0.01) %>%
+    mutate(s = floor(time)) %>%
+    filter(s <= 1) %>%
+    group_by(s) %>%
+    mutate(lag_vm = lag(vm, n = lag_tmp)) %>%
+    ungroup()  %>%
+    drop_na()
+  
+  dd$density = get_density(dd$vm, dd$lag_vm, n = 100)
+  return(dd %>% mutate(lag = lag_tmp))
+}
+
+dens_res2 = map_dfr(.x = seq(1, 99, 1),
+                   .f = get_dens2) %>% 
+  mutate(lag = lag / 100)
+
+dens_res2 = 
+  dens_res2 %>% 
+  mutate(across(c(vm, lag_vm), ~if_else(.x > 3 | .x < 0, NA, .x)))
+
+dd1 =
+  iu_dat %>%
+  filter(ID2 == 2) %>% 
+  mutate(time = (row_number() / 100) - 0.01) %>%
+  mutate(s = floor(time)) %>%
+  filter(s <= 240) %>%
+  group_by(s) %>%
+  mutate(lag_vm = lag(vm, n = 1)) %>%
+  ungroup()  %>%
+  drop_na()
+
+dd1$density = get_density(dd1$vm, dd1$lag_vm, n = 100)
+
+dd2 =
+  iu_dat %>%
+  filter(ID2 == 2) %>% 
+  mutate(time = (row_number() / 100) - 0.01) %>%
+  mutate(s = floor(time)) %>%
+  filter(s <= 240) %>%
+  group_by(s) %>%
+  mutate(lag_vm = lag(vm, n = 2)) %>%
+  ungroup()  %>%
+  drop_na()
+
+dd2$density = get_density(dd2$vm, dd2$lag_vm, n = 100)
+
+dd50 =
+  iu_dat %>%
+  filter(ID2 == 2) %>% 
+  mutate(time = (row_number() / 100) - 0.01) %>%
+  mutate(s = floor(time)) %>%
+  filter(s <= 240) %>%
+  group_by(s) %>%
+  mutate(lag_vm = lag(vm, n = 50)) %>%
+  ungroup()  %>%
+  drop_na()
+
+dd50$density = get_density(dd50$vm, dd50$lag_vm, n = 100)
+
+dd99 =
+  iu_dat %>%
+  filter(ID2 == 2) %>% 
+  mutate(time = (row_number() / 100) - 0.01) %>%
+  mutate(s = floor(time)) %>%
+  filter(s <= 240) %>%
+  group_by(s) %>%
+  mutate(lag_vm = lag(vm, n = 99)) %>%
+  ungroup()  %>%
+  drop_na()
+
+dd99$density = get_density(dd99$vm, dd99$lag_vm, n = 100)
+
+
+
+```
+
+```{r more densities}
+#| cache: true 
+#| include: false
+
+### more densities 
+
+get_dens = function(lag_tmp, id = 2){
+  dd =
+    iu_dat %>%
+    filter(ID2 == id) %>% 
+    mutate(time = (row_number() / 100) - 0.01) %>%
+    mutate(s = floor(time)) %>%
+    filter(s <= 240) %>%
+    group_by(s) %>%
+    mutate(lag_vm = lag(vm, n = lag_tmp)) %>%
+    ungroup()  %>%
+    drop_na()
+  
+  dd$density = get_density(dd$vm, dd$lag_vm, n = 100)
+  return(dd %>% mutate(lag = lag_tmp))
+}
+
+dens_res = map_dfr(.x = seq(5, 99, 10),
+                   .f = get_dens) %>% 
+  mutate(lag = lag / 100) %>% 
+  mutate(across(c(vm, lag_vm), ~if_else(.x > 3 | .x < 0, NA, .x)))
+
+dens_res6 = map_dfr(.x = seq(5, 99, 10),
+                   .f = get_dens,
+                   id = 6) %>% 
+  mutate(lag = lag / 100) %>% 
+  mutate(across(c(vm, lag_vm), ~if_else(.x > 3 | .x < 0, NA, .x)))
+
+dens_res7 = map_dfr(.x = seq(5, 99, 10),
+                   .f = get_dens,
+                   id = 4) %>% 
+  mutate(lag = lag / 100) %>% 
+  mutate(across(c(vm, lag_vm), ~if_else(.x > 3 | .x < 0, NA, .x)))
+
+
+dens_res8 = map_dfr(.x = seq(5, 99, 10),
+                   .f = get_dens,
+                   id = 12) %>% 
+  mutate(lag = lag / 100) %>% 
+  mutate(across(c(vm, lag_vm), ~if_else(.x > 3 | .x < 0, NA, .x)))
+```
+
+
+## Introduction: accelerometry data 
+
+```{r accel plot}
+#| cache: true
+img_plot = ggplot() +
+  ggimage::geom_image(aes(x = 0.5, y = 0.5, image = here::here("docs/figs/actigraph.png")), size = 1) +
+  theme_void() + 
+  theme(
+      plot.background = element_rect(fill = "#FFFFFF", color = NA),
+      panel.background = element_rect(fill = "#FFFFFF", color = NA)
+    )
+
+
+p1 = 
+  driving %>% 
+  ggplot(aes(x = t, y = vm))+
+  geom_line(linewidth = 0.9, color = "#002D72")+
+  theme(panel.grid.minor = element_blank()) +
+  labs(x = "Time (s)", y = "Acceleration (g = 9.81m/s²)") +
+  scale_x_continuous(breaks=seq(0,10,1)) +
+  scale_y_continuous(limits = c(0.5, 1.75)) + 
+  annotate(geom = "label", x = 5, y = 1.5, label = "Driving (passenger)", size = 8, color = "#002D72")
+
+p2 = 
+  cooking %>% 
+  ggplot(aes(x = t, y = vm))+
+  geom_line(linewidth = 0.9, color = "#008767")+
+  theme(panel.grid.minor = element_blank()) +
+  labs(x = "Time (s)", y = "Acceleration (g = 9.81m/s²)") +
+  scale_x_continuous(breaks=seq(0,10,1)) +
+  scale_y_continuous(limits = c(0.5, 1.75)) +
+  annotate(geom = "label", x = 5, y = 1.5, label = "Cooking", size = 8, color = "#008767")
+
+
+p3 = 
+  walking %>% 
+  ggplot(aes(x = t, y = vm))+
+  geom_line(linewidth = 0.9, color = "#A45C98")+
+  theme(panel.grid.minor = element_blank()) +
+  labs(x = "Time (s)", y = "Acceleration (g = 9.81m/s²)") +
+  scale_x_continuous(breaks = seq(0,10,1)) + 
+  scale_y_continuous(limits = c(0.5, 1.75)) +
+  annotate(geom = "label", x = 5, y = 1.5, label = "Walking", size = 8, color = "#A45C98")
+
+
+
+plot_grid(img_plot, NULL, align = "v", rel_widths = c(1,1), ncol = 2)
+```
+
+## Introduction: accelerometry data 
+
+```{r accel plot w fig}
+#| cache: true
+
+
+p1a = p1 / p2 / p3 + plot_layout(guides = "collect", axes = "collect")
+
+plot_grid(img_plot, p1a, align = "v", rel_widths = c(1,1), ncol = 2)
+```
+
+# Can we identify someone from their walking pattern measured by a wrist-worn accelerometer?
+  
+
+
+---
+
+### Problem setup 
+
+
+```{r accel problem setup}
+#| cache: true
+s1 = data %>% 
+  filter(ID2 %in% c(2, 4, 6, 8, 9)) 
+
+ymax = s1 %>% 
+  filter(ID2 %in% c(2, 4, 6)) %>% 
+  filter(time >= 20 & time < 30) %>% 
+  pull(signal_lw) %>% 
+  max()
+  
+ymin = s1 %>% 
+  filter(ID2 %in% c(2, 4, 6)) %>% 
+  filter(time >= 20 & time < 30) %>% 
+  pull(signal_lw) %>% 
+  min()  
+
+label_df = 
+  s1 %>% 
+  filter(ID2 %in% c(2, 4, 6)) %>% 
+  filter(time >= 20 & time < 30) %>% 
+  mutate(ID2 = factor(ID2, labels = c("Person A", "Person B", "Person C"))) %>% 
+  filter(time == 25) %>% 
+  mutate(signal_lw = 2.5)
+
+p1 =
+  s1 %>% 
+  filter(ID2 %in% c(2, 4, 6)) %>% 
+  filter(time >= 20 & time < 30) %>% 
+  mutate(ID2 = factor(ID2, labels = c("Person A", "Person B", "Person C"))) %>%
+  ggplot(aes(x = time, y = signal_lw, color = ID2)) +
+  geom_line(linewidth = 1) + 
+  facet_wrap(.~ID2, ncol = 1) + 
+  scale_color_manual(values = c("#CBA052", "#4E97E0", "#008767")) +
+  labs(x = "Time (s)", y = "Acceleration (g)") + 
+  theme(legend.position = "none",
+        panel.spacing = unit(0.1, "lines"), # tighten vertical spacing
+        strip.text = element_blank(),
+        strip.background = element_blank()) +
+  scale_x_continuous(breaks=seq(20, 30, 2), labels= seq(0,10,2)) + 
+  geom_label(data = label_df, aes(color = ID2, label = ID2), size = 8, show.legend = FALSE)
+
+
+label_df2 = 
+  s1 %>% 
+  filter(ID2 %in% c(6, 8, 9)) %>% 
+  filter(time >= 30 & time < 40) %>% 
+  mutate(ID2 = factor(ID2, labels = c("Person ?", "Person ??", "Person ???"))) %>%
+  filter(time == 35) %>% 
+  mutate(signal_lw = 2.5)
+
+
+p2 =
+  s1 %>% 
+  filter(ID2 %in% c(6, 8, 9)) %>% 
+  filter(time >= 30 & time < 40) %>% 
+  mutate(ID2 = factor(ID2, labels = c("Person ?", "Person ??", "Person ???"))) %>%
+  ggplot(aes(x = time, y = signal_lw, color = ID2)) +
+  geom_line(linewidth = 1) + 
+  facet_wrap(.~ID2, ncol = 1) + 
+  scale_color_manual(values = c("#F56600","#A45C98", "#000000")) +
+  labs(x = "Time (s)", y = "Acceleration (g)") + 
+  theme(legend.position = "none",
+        panel.spacing = unit(0.1, "lines"), # tighten vertical spacing
+        strip.text = element_blank(),
+        strip.background = element_blank()) +
+  scale_x_continuous(breaks=seq(30, 40, 2), labels= seq(0,10,2)) + 
+  scale_y_continuous(limits=c(ymin, ymax)) +
+  geom_label(data = label_df2, aes(color = ID2), label = "?", size = 8, show.legend = FALSE)
+
+
+label_df3 = 
+  s1 %>% 
+  filter(ID2 %in% c(6, 8, 9)) %>% 
+  filter(time >= 30 & time < 40) %>% 
+  mutate(ID2 = factor(ID2, labels = c("Person C", "Person D", "Person E"))) %>%
+  filter(time == 35) %>% 
+  mutate(signal_lw = 2.5)
+
+p3 =
+  s1 %>% 
+  filter(ID2 %in% c(6, 8, 9)) %>% 
+  filter(time >= 30 & time < 40) %>% 
+  mutate(ID2 = factor(ID2, labels = c("Person C", "Person D", "Person E"))) %>%
+  ggplot(aes(x = time, y = signal_lw, color = ID2)) +
+  geom_line(linewidth = 1) + 
+  facet_wrap(.~ID2, ncol = 1) + 
+  scale_color_manual(values = c("#008767","#A45C98", "#000000")) +
+  labs(x = "Time (s)", y = "Acceleration (g)") + 
+  theme(legend.position = "none",
+        panel.spacing = unit(0.1, "lines"), # tighten vertical spacing
+        strip.text = element_blank(),
+        strip.background = element_blank()) +
+  scale_x_continuous(breaks=seq(30, 40, 2), labels= seq(0,10,2)) + 
+  scale_y_continuous(limits=c(ymin, ymax)) +
+  geom_label(data = label_df3, aes(color = ID2, label = ID2), size = 8, show.legend = FALSE)
+
+p_empty =
+  s1 %>% 
+  filter(ID2 %in% c(6, 8, 9)) %>% 
+  filter(time >= 30 & time < 40) %>% 
+  mutate(ID2 = factor(ID2, labels = c("Person C", "Person D", "Person E"))) %>%
+  ggplot(aes(x = time, y = signal_lw, color = ID2)) +
+  scale_x_continuous(breaks=seq(30, 40, 2), labels= seq(0,10,2)) + 
+  theme_void() +
+  theme(panel.background = element_rect(fill = "#ffffff", color = NA),
+        plot.background = element_rect(fill = "#FFFFFF", color = NA))
+
+
+
+# p1 + p_empty + plot_layout(widths = c(1, 1))
+plot_grid(p1, p_empty, ncol = 2, align = "v", rel_widths = c(1,1))
+
+```
+
+---
+
+### Problem setup 
+
+```{r fingerprint question 2}
+#| cache: true
+# p1 + p2 + plot_layout(widths = c(1, 1))
+
+plot_grid(p1, p2, ncol = 2, align = "v", rel_widths = c(1,1))
+
+```
+
+---
+
+### Problem setup 
+
+```{r fingerprint answer}
+plot_grid(p1, p3, ncol = 2, align = "v", rel_widths = c(1,1))
+```
+
+
+---
+
+### Big picture method: time series to images 
+
+```{r def arrow}
+arrow_plot = ggplot() +
+  xlim(0,1) + ylim(0,1) +
+  annotate(
+    "segment",
+    x = 0, xend = 1, y = 0.5, yend = 0.5,
+    arrow = arrow(length = unit(0.1, "inches"), type = "closed"),
+    color = "#D55E00", linewidth = 1.5
+  ) +
+  theme_void() +
+  theme(plot.background = element_rect(fill = "white"))
+```
+
+```{r fprints 3a}
+ 
+
+s1_dens = 
+ dens_df_s2_l15 %>% mutate(lag = "Lag = 0.15s") %>% 
+  bind_rows(dens_df_s2_l30 %>% mutate(lag = "Lag = 0.30s"))
+
+s2_dens = 
+ dens_df_s4_l15 %>% mutate(lag = "Lag = 0.15s") %>% 
+  bind_rows(dens_df_s4_l30 %>% mutate(lag = "Lag = 0.30s"))
+
+s3_dens = 
+ dens_df_s6_l15 %>% mutate(lag = "Lag = 0.15s") %>% 
+  bind_rows(dens_df_s6_l30 %>% mutate(lag = "Lag = 0.30s"))
+
+fprint_plot1 = 
+  s1_dens %>% mutate(id = "Person A") %>% 
+  bind_rows(s2_dens %>% mutate(id = "Person B")) %>% 
+  bind_rows(s3_dens %>% mutate(id = "Person C")) %>%
+  filter(lag == "Lag = 0.15s") %>% 
+  ggplot(aes(x=vm, y=lag_vm, color = density)) +
+  geom_point(size = 0.9, alpha = 0.8) +
+  facet_grid(id~.) +
+  scale_color_viridis(name = "Density", option = "B") +
+  labs(x = "Acceleration (g)", y = "Lagged Acceleration (g)") +
+  scale_x_continuous(limits = c(0,3)) +
+  scale_y_continuous(limits = c(0,3)) +
+  theme(legend.position = "none",
+        strip.text = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+
+p2b = arrow_plot + fprint_plot1 + plot_layout(widths = c(0.15, 0.85))
+
+```
+
+
+```{r x matrix}
+#| cache: true
+n_rows = 15
+n_cols = 10
+
+# Create a dummy data frame for tiles
+pred_matrix = expand_grid(
+  row = 1:n_rows,
+  col = 1:n_cols
+) %>% 
+  mutate(subj = 
+           case_when(row %in% c(1:5) ~ 1,
+                     row %in% c(6:10) ~ 2,
+                     TRUE ~ 3)) %>% 
+  rowwise() %>% 
+  mutate(alpha = runif(1, 0, 1)) %>% 
+  ungroup()
+
+
+# Bracket offsets
+vert_extend = 1.0   # how far the vertical line extends beyond top/bottom
+hor_arm = 0.4       # horizontal arm length
+
+# Left bracket `[`
+left_bracket = tibble(
+  # vertical line
+  x = 0.5 - 0.3, xend = 0.5 - 0.3,
+  y = 0.5 - vert_extend, yend = n_rows + 0.5 + vert_extend,
+  # top horizontal
+  x_top = 0.5 - 0.3, xend_top = 0.5 - 0.3 + hor_arm,
+  y_top = n_rows + 0.5 + vert_extend, yend_top = n_rows + 0.5 + vert_extend,
+  # bottom horizontal
+  x_bottom = 0.5 - 0.3, xend_bottom = 0.5 - 0.3 + hor_arm,
+  y_bottom = 0.5 - vert_extend, yend_bottom = 0.5 - vert_extend
+)
+
+# Right bracket `]`
+right_bracket = tibble(
+  # vertical line
+  x = n_cols + 0.5 + 0.3, xend = n_cols + 0.5 + 0.3,
+  y = 0.5 - vert_extend, yend = n_rows + 0.5 + vert_extend,
+  # top horizontal
+  x_top = n_cols + 0.5 + 0.3, xend_top = n_cols + 0.5 + 0.3 - hor_arm,
+  y_top = n_rows + 0.5 + vert_extend, yend_top = n_rows + 0.5 + vert_extend,
+  # bottom horizontal
+  x_bottom = n_cols + 0.5 + 0.3, xend_bottom = n_cols + 0.5 + 0.3 - hor_arm,
+  y_bottom = 0.5 - vert_extend, yend_bottom = 0.5 - vert_extend
+)
+
+# Plot
+p2 = ggplot(pred_matrix, aes(x = col, y = row, fill = factor(subj), alpha = alpha)) + 
+  geom_tile(color = "grey70", size = 0.5) +
+  # Left bracket
+  geom_segment(data = left_bracket, aes(x = x, xend = xend, y = y, yend = yend), inherit.aes = FALSE, size = 1) +
+  geom_segment(data = left_bracket, aes(x = x_top, xend = xend_top, y = y_top, yend = yend_top), inherit.aes = FALSE, size = 1) +
+  geom_segment(data = left_bracket, aes(x = x_bottom, xend = xend_bottom, y = y_bottom, yend = yend_bottom), inherit.aes = FALSE, size = 1) +
+  # Right bracket
+  geom_segment(data = right_bracket, aes(x = x, xend = xend, y = y, yend = yend), inherit.aes = FALSE, size = 1) +
+  geom_segment(data = right_bracket, aes(x = x_top, xend = xend_top, y = y_top, yend = yend_top), inherit.aes = FALSE, size = 1) +
+  geom_segment(data = right_bracket, aes(x = x_bottom, xend = xend_bottom, y = y_bottom, yend = yend_bottom), inherit.aes = FALSE, size = 1) +
+  theme_minimal(base_family = "Source Sans Pro") +
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.background = element_rect(fill = "#f6f5f3", color = NA),
+    plot.title = element_text(size = 36, face = "bold", hjust = 0.5)
+  ) +
+  # labs(title = "X") +
+  theme(legend.position = "none") + 
+  scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73")) +
+  scale_y_reverse()
+
+p2  = 
+  p2 + 
+  annotate(geom = "label", x = 5.5, y = 2.5, label = "Predictors from person A", color = "#E69F00", size = 5)  +
+  annotate(geom = "label", x = 5.5, y = 7.5, label = "Predictors from person B", color = "#56B4E9", size = 5) +
+  annotate(geom = "label", x = 5.5, y = 12.5, label = "Predictors from person C", color = "#009E73", size = 5) 
+
+p2a = arrow_plot + p2 + plot_layout(widths = c(0.15, 0.85))
+```
+
+```{r print arrow x }
+# p1 + p2a + plot_layout(widths = c(1, 1))
+
+# plot_grid(p1, p2a, ncol = 2, align = "v", rel_widths = c(1,1))
+# plot_grid(p1, p2b, ncol = 2, align = "v", rel_widths = c(1,1))
+
+# plot_grid(p1, p2b, p_empty, ncol = 3, align = "v", rel_widths = c(1, 1, 1))
+plot_grid(p1, p2b, ncol = 2, align = "v", rel_widths = c(1, 1))
+# plot_grid(p1, p2b, p2a, ncol = 3, align = "v", rel_widths = c(1, 1, 1))
+
+
+```
+
+
+---
+
+
+### Fingerprints summarize predictors for a given lag and are different across individuals
+
+```{r fprints 3}
+#| cache: true 
+
+s1_dens = 
+ dens_df_s2_l15 %>% mutate(lag = "Lag = 0.15s") %>% 
+  bind_rows(dens_df_s2_l30 %>% mutate(lag = "Lag = 0.30s"))
+
+s2_dens = 
+ dens_df_s4_l15 %>% mutate(lag = "Lag = 0.15s") %>% 
+  bind_rows(dens_df_s4_l30 %>% mutate(lag = "Lag = 0.30s"))
+
+s3_dens = 
+ dens_df_s6_l15 %>% mutate(lag = "Lag = 0.15s") %>% 
+  bind_rows(dens_df_s6_l30 %>% mutate(lag = "Lag = 0.30s"))
+
+s1_dens %>% mutate(id = "Person A") %>% 
+  bind_rows(s2_dens %>% mutate(id = "Person B")) %>% 
+  bind_rows(s3_dens %>% mutate(id = "Person C")) %>%
+  ggplot(aes(x=vm, y=lag_vm, color = density)) +
+  geom_point(size = 0.9, alpha = 0.8) +
+  facet_grid(id~lag) +
+  scale_color_viridis(name = "Density", option = "B") +
+  labs(x = "Acceleration (g)", y = "Lagged Acceleration (g)") +
+  scale_x_continuous(limits = c(0,3)) +
+  scale_y_continuous(limits = c(0,3)) 
+```
+
+---
+
+### Fingerprints summarize predictors for a given lag and are different across individuals
+
+<img src="figs/time_series2.gif" class="gif-inline">
+<img src="figs/fingerprint3.gif" class="gif-inline">
+
+---
+
+### Fingerprints summarize predictors for a given lag and are different across individuals
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+
+```{r s41}
+#| fig-width: 7
+#| fig-height: 4
+#| cache: true
+#| out-width: "100%"
+
+plot_ly(
+  dens_res,
+  x = ~vm,
+  y = ~lag_vm,
+  z = ~lag,
+  color = ~density,
+  colors = viridis::viridis(100, option = "B"),
+  type = "scatter3d",
+  mode = "markers",
+  marker = list(size = 1, opacity = 0.5) 
+) %>%
+  colorbar(title = "Density") %>%
+  layout(
+    title = list(text = "Predictor for person A", y = 0.95),
+    # INCREASE margins here to prevent label clipping
+    margin = list(l = 80, r = 80, b = 80, t = 0), 
+    scene = list(
+      xaxis = list(title = "Acceleration (g)"),
+      yaxis = list(title = "Lag Acceleration (g)"),
+      zaxis = list(title = "Lag (s)")
+      # Optional: Adjust camera to zoom out slightly if labels still clip
+      # camera = list(eye = list(x = 1.5, y = 1.5, z = 1.5))
+    )
+  )
+
+
+```
+
+
+
+
+```{r s42}
+#| fig-width: 7
+#| fig-height: 4
+#| cache: true
+#| out-width: "100%"
+
+plot_ly(
+  dens_res6,
+  x = ~vm,
+  y = ~lag_vm,
+  z = ~lag,
+  color = ~density,
+  colors = viridis::viridis(100, option = "B"),
+  type = "scatter3d",
+  mode = "markers",
+  marker = list(size = 1, opacity = 0.5) 
+) %>%
+  colorbar(title = "Density") %>%
+  layout(
+    title = list(text = "Predictor for person B", y = 0.95),
+    # INCREASE margins here to prevent label clipping
+    margin = list(l = 80, r = 80, b = 80, t = 0), 
+    scene = list(
+      xaxis = list(title = "Acceleration (g)"),
+      yaxis = list(title = "Lag Acceleration (g)"),
+      zaxis = list(title = "Lag (s)")
+      # Optional: Adjust camera to zoom out slightly if labels still clip
+      # camera = list(eye = list(x = 1.5, y = 1.5, z = 1.5))
+    )
+  )
+
+
+```
+
+:::
+
+::: {.column width="50%"}
+
+```{r s43}
+#| fig-width: 7
+#| fig-height: 4
+#| cache: true
+#| out-width: "100%"
+
+plot_ly(
+  dens_res7,
+  x = ~vm,
+  y = ~lag_vm,
+  z = ~lag,
+  color = ~density,
+  colors = viridis::viridis(100, option = "B"),
+  type = "scatter3d",
+  mode = "markers",
+  marker = list(size = 1, opacity = 0.5) 
+) %>%
+  colorbar(title = "Density") %>%
+  layout(
+    title = list(text = "Predictor for person C", y = 0.95),
+    # INCREASE margins here to prevent label clipping
+    margin = list(l = 80, r = 80, b = 80, t = 0), 
+    scene = list(
+      xaxis = list(title = "Acceleration (g)"),
+      yaxis = list(title = "Lag Acceleration (g)"),
+      zaxis = list(title = "Lag (s)")
+      # Optional: Adjust camera to zoom out slightly if labels still clip
+      # camera = list(eye = list(x = 1.5, y = 1.5, z = 1.5))
+    )
+  )
+
+
+```
+
+```{r s44}
+#| fig-width: 7
+#| fig-height: 4
+#| cache: true
+#| out-width: "100%"
+
+plot_ly(
+  dens_res8,
+  x = ~vm,
+  y = ~lag_vm,
+  z = ~lag,
+  color = ~density,
+  colors = viridis::viridis(100, option = "B"),
+  type = "scatter3d",
+  mode = "markers",
+  marker = list(size = 1, opacity = 0.5) 
+) %>%
+  colorbar(title = "Density") %>%
+  layout(
+    title = list(text = "Predictor for person D", y = 0.95),
+    # INCREASE margins here to prevent label clipping
+    margin = list(l = 80, r = 80, b = 80, t = 0), 
+    scene = list(
+      xaxis = list(title = "Acceleration (g)"),
+      yaxis = list(title = "Lag Acceleration (g)"),
+      zaxis = list(title = "Lag (s)")
+      # Optional: Adjust camera to zoom out slightly if labels still clip
+      # camera = list(eye = list(x = 1.5, y = 1.5, z = 1.5))
+    )
+  )
+
+
+```
+
+:::
+
+::::
+
+---
+
+
+### Fingerprints
+
+```{r fprints}
+#| cache: true
+plot_list = map(.x = c(82367, 78466, 66810, 79001, 79235), .f = make_plot)
+
+p1 = plot_list[[1]] + plot_list[[2]] + plot_list[[3]]  +
+  plot_layout(nrow = 1, axes = 'collect') + plot_annotation(title = "Well-Predicted Participants")
+p1 
+```
+
+---
+
+
+
+### Fingerprints 
+
+```{r fp2}
+#| cache: true
+plot_list2 = map(.x = c(69878, 72735, 65584, 73266, 72232), .f = make_plot)
+
+p2 = plot_list2[[1]] + plot_list2[[2]] + plot_list2[[3]]  +
+  plot_layout(nrow = 1, axes = 'collect') + plot_annotation(title = "Poorly-Predicted Participants")
+p2
+```
+
+---
+
+# What about other data sources? 
+
+---
+
+## Thank you!
+
+<br>
+<div style="font-size: 150%;">
+
+- Link to slides: [tinyurl.com/koff-enar25](tinyurl.com/koff-enar25) 
+- Email: [lkoffma2@jh.edu](lkoffma2@jh.edu)
+- Website: [lilykoff.com](lilykoff.com)
+- Github: [github.com/lilykoff](github.com/lilykoff)
+- ENAR Presentation: Tuesday | 3PM | Session \# 86: Dynamic Modeling Approaches for Longitudinal Data
+ 
+</div>
+<br>
+
+
+---
+
+## References
+
+::: {#refs}
+:::
+
