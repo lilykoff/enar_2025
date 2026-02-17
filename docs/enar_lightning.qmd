@@ -1400,8 +1400,4 @@ mean_preds %>%
 
 ---
 
-## References
-
-::: {#refs}
-:::
 
