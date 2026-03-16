@@ -125,7 +125,7 @@ okabe_ito <- c(
 
 
 showtext_auto()
-font_add_google("Source Sans Pro", "Source Sans Pro")
+font_add_google("Source Sans 3", "Source Sans Pro")
 
 # JHU palette (subset)
 jhu_primary <- c(
@@ -457,6 +457,22 @@ dd99$density = get_density(dd99$vm, dd99$lag_vm, n = 100)
 
 ```
 
+```{r xtra data}
+#| cache: true
+#| include: false 
+xdf = read_csv(here::here("data", "iu_subj2.csv"))
+
+xdf = 
+  xdf %>% 
+  filter(activity == 4) %>% 
+  mutate(signal = sqrt(lw_x^2 + lw_y^2 + lw_z^2)) %>% 
+  slice(1:(10*100)) %>% 
+  mutate(t = (row_number() -1) / 100) %>% 
+  select(signal, t)
+
+```
+
+
 ```{r model results processing}
 #| cache: true
 #| include: false 
@@ -572,6 +588,34 @@ all_logistic =
 
 ```
 
+## Before we get started...
+
+<div style="font-size: 125%;">
+**Join the Mobile and Wearable Data Science ASA Interest Group!** 
+[wearableds.github.io/involvement](wearableds.github.io/involvement)
+
+</div>
+
+::: {.columns}
+
+:::: {.column}
+
+![](figs/wearable_DS_QR.png)
+
+:::: 
+
+:::: {.column}
+
+![](figs/interest_group_logo.jpg)
+
+:::: 
+:::
+
+
+
+
+
+
 ## Introduction: accelerometry data 
 
 ```{r accel plot}
@@ -616,7 +660,15 @@ p3 =
   scale_y_continuous(limits = c(0.5, 1.75)) +
   annotate(geom = "label", x = 5, y = 1.5, label = "Walking", size = 8, color = "#A45C98")
 
-
+p3v2 = 
+  xdf %>% 
+  ggplot(aes(x = t, y = signal))+
+  geom_line(linewidth = 0.9, color = "#000000")+
+  theme(panel.grid.minor = element_blank()) +
+  labs(x = "Time (s)", y = "Acceleration (g = 9.81m/s²)") +
+  scale_x_continuous(breaks = seq(0,10,1)) + 
+  scale_y_continuous(limits = c(0.5, 1.75)) +
+  annotate(geom = "label", x = 5, y = 1.5, label = "??", size = 8, color = "#000000")
 
 plot_grid(img_plot, NULL, align = "v", rel_widths = c(1,1), ncol = 2)
 ```
@@ -662,6 +714,22 @@ p3_annotated = p3 + plot_annotation(
   )
   )
 
+p3v2_annotated = p3v2 + plot_annotation(
+  caption = "80 observations per second\n× 60 seconds/minute\n× 1440 minutes/day\n× 7 days\n× 15,000 individuals\n=726 billion data points",
+  theme = theme(
+    plot.caption = element_text(
+      hjust = 0.5,            # center the text
+      vjust = 1,              # bring it up a bit
+      size = 14,              # large and clear
+      face = "bold",          # prominent
+      family = "Source Sans Pro",
+      color = "black",        # use a strong color
+      lineheight = 1.1        # control spacing between lines
+    ),
+    plot.background = element_rect(fill = "#FFFFFF", color = NA)
+  )
+  )
+  
 final_plot = nh_img_plot + 
   wrap_elements(p3_annotated) + 
   plot_layout(widths = c(1, 1), heights = c(1))
@@ -811,6 +879,7 @@ plot_grid(p1, p2, ncol = 2, align = "v", rel_widths = c(1,1))
 ### Problem setup 
 
 ```{r fingerprint answer}
+#| cache: true 
 plot_grid(p1, p3, ncol = 2, align = "v", rel_widths = c(1,1))
 ```
 
@@ -916,6 +985,7 @@ p2a = arrow_plot + p2 + plot_layout(widths = c(0.1, 0.9))
 ```
 
 ```{r print arrow x }
+#| cache: true
 # p1 + p2a + plot_layout(widths = c(1, 1))
 
 plot_grid(p1, p2a, ncol = 2, align = "v", rel_widths = c(1,1))
@@ -925,7 +995,7 @@ plot_grid(p1, p2a, ncol = 2, align = "v", rel_widths = c(1,1))
 ---
 
 
-### Fingerprints summarize predictors for a given lag and are different across individuals
+### "Fingerprints" summarize predictors and are different across individuals
 
 ```{r fprints 3}
 #| cache: true 
@@ -954,12 +1024,16 @@ s1_dens %>% mutate(id = "Person A") %>%
   scale_y_continuous(limits = c(0,3)) 
 ```
 
----
+```{r}
+#| include: false
+#| eval: false
 
 ### Fingerprints summarize predictors for a given lag and are different across individuals
 
-<img src="figs/time_series2.gif" class="gif-inline">
-<img src="figs/fingerprint3.gif" class="gif-inline">
+# <img src="figs/time_series2.gif" class="gif-inline">
+# <img src="figs/fingerprint3.gif" class="gif-inline">
+```
+
 
 ---
 
@@ -1131,62 +1205,48 @@ p4 + p3n + plot_layout(ncol = 2, widths = c(0.3, 1))
 
 ---
 
-### Results in labeled datasets 
+### The method(s) works really well when we know people are walking
 
-:::: {.columns}
-
-::: {.column width="45%"}
+<div style="font-size: 125%;">
 
 **32 individuals, 6 minutes of walking each**
 
 100\% rank-1 accuracy 
 [@Koffman2023]
 
-:::
-
-
-::: {.column width="55%"}
 
 **153 individuals, 3 minutes of walking each**
 
 *Two sessions, at least 1 week apart* 
 
 
-Rank-1 (rank-5) % accuracies 
-
-
 + Train and test on session 1
-  + Logistic regression: 92 (97) 
-  + <span style="color:#009E73;">XGBoost: 93 (99)</span>
+  + 93\% rank-1 accuracy
 
 + Train on session 1, test on session 2 
-  + Logistic regression: 41 (75)
-  + <span style="color:#009E73;">XGBoost: 58 (78)</span>
+  + 58\% rank-1 accuracy 
 
 
 [@Koffman2024]
 
-:::
-
-::::
+</div>
 
 
-# Can we identify someone from their walking pattern measured by a wrist-worn accelerometer in large, unlabeled data sets?
+# Will the method work in a large, unlabeled data set?
+
 
 ---
 
+### NHANES data
 
-### NHANES data: recap 
+```{r accel plot nhanes 2}
+#| cache: true
+nh_img_plot + 
+  wrap_elements(p3v2_annotated) + 
+  plot_layout(widths = c(1, 1), heights = c(1))
 
-+ $>15,000$ participants
-+ $7$ days of wrist accelerometry
-+ $10$Tb of data 
-+ Open source processing pipeline 
-+ Publicly available data repository 
-+ **First** nationally representative estimate of steps in the US population using open source algorithms
+```
 
-![](figs/physionet.png){width=70%}
-<div style=" position: absolute; bottom: 0.5em; right: -4em; font-size: 0.7em; color: #777; "> @physionet </div>
 
 ---
 
@@ -1348,6 +1408,7 @@ p2
 ### Use algorithms to identify walking 
 
 ```{r wb2}
+#| cache: true
 p2 + 
   geom_label(data = tibble(method = "ADEPT", total = 10),
              aes(x = total, y = 4000, label = "85% of participants have at least\n3 minutes of ADEPT-identified walking"), color = "#F56600", size = 4, inherit.aes = FALSE)
@@ -1359,6 +1420,7 @@ p2 +
 ### Use algorithms to identify walking 
 
 ```{r wb3}
+#| cache: true
 p2 + 
   geom_label(data = tibble(method = "ADEPT", total = 10),
              aes(x = total, y = 4000, label = "85% of participants have at least\n3 minutes of ADEPT-identified walking"), color = "#F56600", size = 4, inherit.aes = FALSE) +
@@ -1427,7 +1489,9 @@ p = df %>%
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         axis.text.x = element_blank(),
-        axis.ticks.y = element_blank())
+        axis.ticks.y = element_blank(),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14))
 
 
 p
@@ -1439,27 +1503,27 @@ p
 
 ### Fit models
 
-**Questions** 
+<div style="font-size: 150%;">
+
+**How important is... ?**
 
 ::: {.incremental}
-+ How important is sample size? 
-  + Fit on subgroups of size $n=100$ and entire $N$ 
-+ How important is walking identification algorithm accuracy? 
-  + Compare ADEPT, stepcount on same individuals 
-+ How important is length of training data? 
-  + Train on 3 min vs. 30 min.
-+ How important is train/test partition type? 
-  + Compare random vs. temporal
-+ How important is model choice? 
-  + Compare logistic regression, XGBoost, random forest
-+ Can we improve logistic regression? 
-  + Weighting, oversampling 
++ Sample size
++ Choice of walking identification algorithm 
++ Amount of training data
++ Paradigm for train/test partition 
++ Model choice 
+
 
 ::: 
+
+</div> 
 
 ---
 
 ### Sample size 
+
+Accuracy $\downarrow$ with increasing sample size
 
 ```{r ss} 
 #| cache: true 
@@ -1542,6 +1606,8 @@ p
 
 ### Algorithm 
 
+More specific algorithm is better
+
 ```{r algo res}
 #| cache: true 
 # for n = 100, show boxplots of sc vs. adept 
@@ -1563,7 +1629,9 @@ ad_100 %>%
 
 ---
 
-### Length of data 
+### Amount of training data 
+
+More data is better
 
 ```{r length res}
 #| cache: true 
@@ -1591,6 +1659,8 @@ ad_100 %>%
 
 ### Train/test partition 
 
+Temporal setting is harder
+
 ```{r tt res}
 #| cache: true 
 
@@ -1615,6 +1685,8 @@ ad_100 %>%
 ---
 
 ### Model choice 
+
+It depends... and computational time is not equal 
 
 ```{r rf vs log}
 #| cache: true 
@@ -1726,73 +1798,55 @@ res_100 %>%
       <th>Model</th>
       <th>Rank 1</th>
       <th>Rank 1%</th>
-      <th>Rank 5</th>
-      <th>Rank 5%</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td rowspan="4" class="group-header">Random<br><span style="font-weight:normal; font-style:italic;">(n=13,367)</span></td>
       <td>Logistic</td>
-      <td>9.7</td>
+      <td style="color: #F56600;">9.7</td> 
       <td>68</td>
-      <td>21</td>
-      <td>93</td>
     </tr>
     <tr>
       <td>Oversampled at 10%</td>
-      <td><strong>41</strong></td>
+      <td><strong style="color: #008767;">41</strong></td>
       <td>68</td>
-      <td><strong>95</strong></td>
-      <td>99</td>
     </tr>
     <tr>
       <td>Weighted</td>
       <td>34</td>
-      <td><strong>96</strong></td>
-      <td>61</td>
-      <td><strong>100</strong></td>
+      <td><strong style="color: #008767;">96</strong></td>
     </tr>
     <tr>
       <td>Two-stage</td>
       <td>20</td>
       <td>68</td>
-      <td>37</td>
-      <td>93</td>
     </tr>
     
     <tr>
       <td rowspan="4" class="group-header">Temporal<br><span style="font-weight:normal; font-style:italic;">(n=10,770)</span></td>
       <td>Logistic</td>
-      <td>0.028</td>
+      <td style="color: #F56600;">0.028</td>
       <td>26</td>
-      <td>5.1</td>
-      <td>49</td>
     </tr>
     <tr>
       <td>Oversampled at 10%</td>
       <td>4.3</td>
-      <td><strong>32</strong></td>
-      <td><strong>10</strong></td>
-      <td><strong>52</strong></td>
+      <td><strong style="color: #008767;">32</strong></td>
     </tr>
     <tr>
       <td>Weighted</td>
       <td>1.8</td>
       <td>23</td>
-      <td>5.1</td>
-      <td>45</td>
     </tr>
     <tr>
       <td>Two-stage</td>
-      <td><strong>5.2</strong></td>
+      <td><strong style="color: #008767;">5.2</strong></td>
       <td>26</td>
-      <td>10</td>
-      <td>49</td>
     </tr>
   </tbody>
   <caption>
-    Rank 1, rank 1%, rank 5, rank 5% accuracies of different model types on the entire population for each model. The best model in each category is bolded.
+    Rank 1 and rank 1% accuracies of different model types on the entire population for each model. 
   </caption>
 </table>
 
@@ -1804,6 +1858,8 @@ res_100 %>%
 ```{r fprints}
 #| cache: true
 plot_list = map(.x = c(82367, 78466, 66810, 79001, 79235), .f = make_plot)
+
+# write_rds(plot_list, here::here("data/well_pred.rds"))
 
 p1 = plot_list[[1]] + plot_list[[2]] + plot_list[[3]]  +
   plot_layout(nrow = 1, axes = 'collect') + plot_annotation(title = "Well-Predicted Participants")
@@ -1817,6 +1873,8 @@ p1
 ```{r fp2}
 #| cache: true
 plot_list2 = map(.x = c(69878, 72735, 65584, 73266, 72232), .f = make_plot)
+
+# write_rds(plot_list2, here::here("data/poor_pred.rds"))
 
 p2 = plot_list2[[1]] + plot_list2[[2]] + plot_list2[[3]]  +
   plot_layout(nrow = 1, axes = 'collect') + plot_annotation(title = "Poorly-Predicted Participants")
