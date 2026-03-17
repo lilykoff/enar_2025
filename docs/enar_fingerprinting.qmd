@@ -10,7 +10,7 @@ institute: "Department of Biostatistics, Johns Hopkins School of Public Health"
 format:
   revealjs:
     theme: custom.scss
-    slide-number: true
+    slide-number: false
     toc: false
     progress: true
     hash: true
@@ -684,9 +684,9 @@ p1a = p1 / p2 / p3 + plot_layout(guides = "collect", axes = "collect")
 plot_grid(img_plot, p1a, align = "v", rel_widths = c(1,1), ncol = 2)
 ```
 
-## Introduction: **big** accelerometry data 
 
 ```{r accel plot nhanes}
+#| include: false 
 #| cache: true
 nh_img_plot = ggplot() +
   ggimage::geom_image(aes(x = 0.5, y = 0.5, image = here::here("docs/figs/nhanes.png")), size = 1) +
@@ -715,7 +715,7 @@ p3_annotated = p3 + plot_annotation(
   )
 
 p3v2_annotated = p3v2 + plot_annotation(
-  caption = "80 observations per second\n× 60 seconds/minute\n× 1440 minutes/day\n× 7 days\n× 15,000 individuals\n=726 billion data points",
+  caption = "80 observations per second\n× 60 seconds/minute\n× 1440 minutes/day\n× 7 days\n× 15,000 individuals\n=726 billion data points (10 Tb)",
   theme = theme(
     plot.caption = element_text(
       hjust = 0.5,            # center the text
@@ -734,7 +734,7 @@ final_plot = nh_img_plot +
   wrap_elements(p3_annotated) + 
   plot_layout(widths = c(1, 1), heights = c(1))
 
-final_plot
+
 ```
 
 
@@ -994,50 +994,6 @@ plot_grid(p1, p2a, ncol = 2, align = "v", rel_widths = c(1,1))
 
 ---
 
-
-### "Fingerprints" summarize predictors and are different across individuals
-
-```{r fprints 3}
-#| cache: true 
-
-s1_dens = 
- dens_df_s2_l15 %>% mutate(lag = "Lag = 0.15s") %>% 
-  bind_rows(dens_df_s2_l30 %>% mutate(lag = "Lag = 0.30s"))
-
-s2_dens = 
- dens_df_s4_l15 %>% mutate(lag = "Lag = 0.15s") %>% 
-  bind_rows(dens_df_s4_l30 %>% mutate(lag = "Lag = 0.30s"))
-
-s3_dens = 
- dens_df_s6_l15 %>% mutate(lag = "Lag = 0.15s") %>% 
-  bind_rows(dens_df_s6_l30 %>% mutate(lag = "Lag = 0.30s"))
-
-s1_dens %>% mutate(id = "Person A") %>% 
-  bind_rows(s2_dens %>% mutate(id = "Person B")) %>% 
-  bind_rows(s3_dens %>% mutate(id = "Person C")) %>%
-  ggplot(aes(x=vm, y=lag_vm, color = density)) +
-  geom_point(size = 0.9, alpha = 0.8) +
-  facet_grid(id~lag) +
-  scale_color_viridis(name = "Density", option = "B") +
-  labs(x = "Acceleration (g)", y = "Lagged Acceleration (g)") +
-  scale_x_continuous(limits = c(0,3)) +
-  scale_y_continuous(limits = c(0,3)) 
-```
-
-```{r}
-#| include: false
-#| eval: false
-
-### Fingerprints summarize predictors for a given lag and are different across individuals
-
-# <img src="figs/time_series2.gif" class="gif-inline">
-# <img src="figs/fingerprint3.gif" class="gif-inline">
-```
-
-
----
-
-
 ### Model fitting 
 
 
@@ -1205,7 +1161,70 @@ p4 + p3n + plot_layout(ncol = 2, widths = c(0.3, 1))
 
 ---
 
-### The method(s) works really well when we know people are walking
+
+
+
+### "Fingerprints" summarize predictors and are different across individuals
+
+```{r fprints 3}
+#| cache: true 
+
+s1_dens = 
+ dens_df_s2_l15 %>% mutate(lag = "Lag = 0.15s") %>% 
+  bind_rows(dens_df_s2_l30 %>% mutate(lag = "Lag = 0.30s"))
+
+s2_dens = 
+ dens_df_s4_l15 %>% mutate(lag = "Lag = 0.15s") %>% 
+  bind_rows(dens_df_s4_l30 %>% mutate(lag = "Lag = 0.30s"))
+
+s3_dens = 
+ dens_df_s6_l15 %>% mutate(lag = "Lag = 0.15s") %>% 
+  bind_rows(dens_df_s6_l30 %>% mutate(lag = "Lag = 0.30s"))
+
+s1_dens %>% mutate(id = "Person A") %>% 
+  bind_rows(s2_dens %>% mutate(id = "Person B")) %>% 
+  bind_rows(s3_dens %>% mutate(id = "Person C")) %>%
+  ggplot(aes(x=vm, y=lag_vm, color = density)) +
+  geom_point(size = 0.9, alpha = 0.8) +
+  facet_grid(id~lag) +
+  scale_color_viridis(name = "Density", option = "B") +
+  labs(x = "Acceleration (g)", y = "Lagged Acceleration (g)") +
+  scale_x_continuous(limits = c(0,3)) +
+  scale_y_continuous(limits = c(0,3)) 
+```
+
+```{r}
+#| include: false
+#| eval: false
+
+### Fingerprints summarize predictors for a given lag and are different across individuals
+
+# <img src="figs/time_series2.gif" class="gif-inline">
+# <img src="figs/fingerprint3.gif" class="gif-inline">
+```
+
+
+---
+
+
+
+
+### The method works really well when we know people are walking
+
+<div style="font-size: 125%;">
+
+**32 individuals, 6 minutes of walking each**
+
+100\% rank-1 accuracy 
+[@Koffman2023]
+
+
+
+</div>
+
+---
+
+### The method works really well when we know people are walking
 
 <div style="font-size: 125%;">
 
@@ -1217,20 +1236,13 @@ p4 + p3n + plot_layout(ncol = 2, widths = c(0.3, 1))
 
 **153 individuals, 3 minutes of walking each**
 
-*Two sessions, at least 1 week apart* 
 
 
 + Train and test on session 1
   + 93\% rank-1 accuracy
-
-+ Train on session 1, test on session 2 
-  + 58\% rank-1 accuracy 
-
-
 [@Koffman2024]
 
 </div>
-
 
 # Will the method work in a large, unlabeled data set?
 
@@ -1240,7 +1252,7 @@ p4 + p3n + plot_layout(ncol = 2, widths = c(0.3, 1))
 ### NHANES data
 
 ```{r accel plot nhanes 2}
-#| cache: true
+
 nh_img_plot + 
   wrap_elements(p3v2_annotated) + 
   plot_layout(widths = c(1, 1), heights = c(1))
@@ -1257,7 +1269,7 @@ nh_img_plot +
 **Process outline**
 
 ::: {.incremental}
-+ Use algorithm to identify walking 
++ Use algorithm to find walking 
 + Partition data into train/test 
 + Fit models 
 :::
@@ -1411,7 +1423,7 @@ p2
 #| cache: true
 p2 + 
   geom_label(data = tibble(method = "ADEPT", total = 10),
-             aes(x = total, y = 4000, label = "85% of participants have at least\n3 minutes of ADEPT-identified walking"), color = "#F56600", size = 4, inherit.aes = FALSE)
+             aes(x = total, y = 4000, label = "85% of participants have at least\n3 minutes of ADEPT-identified walking"), color = "#F56600", size = 5, inherit.aes = FALSE)
 
 ```
 
@@ -1423,9 +1435,9 @@ p2 +
 #| cache: true
 p2 + 
   geom_label(data = tibble(method = "ADEPT", total = 10),
-             aes(x = total, y = 4000, label = "85% of participants have at least\n3 minutes of ADEPT-identified walking"), color = "#F56600", size = 4, inherit.aes = FALSE) +
+             aes(x = total, y = 4000, label = "85% of participants have at least\n3 minutes of ADEPT-identified walking"), color = "#F56600", size = 5, inherit.aes = FALSE) +
   geom_label(data = tibble(method = "stepcount", total = 30),
-             aes(x = total, y = 1000, label = "98% of participants have at least\n30 minutes of stepcount-identified walking"), color = "#F56600", size = 4, inherit.aes = FALSE) 
+             aes(x = total, y = 1000, label = "98% of participants have at least\n30 minutes of stepcount-identified walking"), color = "#F56600", size = 5, inherit.aes = FALSE) 
 
 ```
 
@@ -1535,6 +1547,7 @@ lab_df =
   group_by(n, paradigm) %>%
   summarize(across(starts_with("rank"), median)) %>%
   pivot_longer(cols = contains("rank"), names_to = "metric", values_to = "value") %>%
+  filter(metric %in% c("rank1", "rank1pct")) %>% 
   ungroup() %>%
   filter(n == 5000) %>%
   mutate(metric_lab =
@@ -1565,9 +1578,9 @@ p = all_logistic %>%
   geom_label(data = lab_df,
              aes(x = n, y = value, label = metric_lab, color = metric),
              hjust = -.5, size = 4) +
-  labs(x = "Number of Participants (x100)", y = "Median Accuracy") +
-  scale_color_manual(values = c("#F56600", "#CBA052", "#002D72", "#4E97E0"),
-                     labels = c("Rank 1", "Rank 1%", "Rank 5", "Rank 5%"), name = "Metric")
+  labs(x = "Number of Participants (x100)", y = "Median Accuracy (%)") +
+  scale_color_manual(values = c("#F56600", "#CBA052"),
+                     labels = c("Rank 1", "Rank 1%"), name = "Metric")
 
 p = all_logistic %>%
   mutate(paradigm = factor(paradigm, labels = c("Random", "Temporal"))) %>%
@@ -1575,6 +1588,7 @@ p = all_logistic %>%
   summarize(across(starts_with("rank"), median)) %>%
   pivot_longer(cols = contains("rank"), names_to = "metric", values_to = "value") %>%
   filter(paradigm == "Random") %>% 
+  filter(metric %in% c("rank1", "rank1pct")) %>% 
   # mutate(name = factor(name, labels = c("Rank 1", "Rank 5"))) %>%
   ggplot(aes(x = n, y = value, color = metric, group = metric)) +
   geom_jitter(width = 25, size = 3) +
@@ -1596,8 +1610,8 @@ p = all_logistic %>%
   labs(x = "Number of Participants (x100)", y = "Median Accuracy",
        title = "Accuracy by sample size",
        subtitle = "ADEPT, 3 min of data per ppt, random train/test") +
-  scale_color_manual(values = c("#F56600", "#CBA052", "#002D72", "#4E97E0"),
-                     labels = c("Rank 1", "Rank 1%", "Rank 5", "Rank 5%"), name = "Metric")
+  scale_color_manual(values = c("#F56600", "#CBA052"),
+                     labels = c("Rank 1", "Rank 1%"), name = "Metric")
 p
 ```
 
@@ -1822,31 +1836,9 @@ res_100 %>%
       <td>20</td>
       <td>68</td>
     </tr>
-    
-    <tr>
-      <td rowspan="4" class="group-header">Temporal<br><span style="font-weight:normal; font-style:italic;">(n=10,770)</span></td>
-      <td>Logistic</td>
-      <td style="color: #F56600;">0.028</td>
-      <td>26</td>
-    </tr>
-    <tr>
-      <td>Oversampled at 10%</td>
-      <td>4.3</td>
-      <td><strong style="color: #008767;">32</strong></td>
-    </tr>
-    <tr>
-      <td>Weighted</td>
-      <td>1.8</td>
-      <td>23</td>
-    </tr>
-    <tr>
-      <td>Two-stage</td>
-      <td><strong style="color: #008767;">5.2</strong></td>
-      <td>26</td>
-    </tr>
   </tbody>
   <caption>
-    Rank 1 and rank 1% accuracies of different model types on the entire population for each model. 
+    Rank 1 and rank 1% accuracies of different model types on the entire population (n=13367)
   </caption>
 </table>
 
@@ -1886,22 +1878,15 @@ p2
 
 ## Summary 
 <br> 
-<div style="font-size: 150%;">
+<div style="font-size: 145%;">
 
 + We can identify individuals from their walking patterns in large, unlabeled datasets using predictors derived from acceleration, lag acceleration
 + Performance depends on sample size, walking identification algorithm, train/test partition, length of training data, model choice 
 + Preprint on arXiv [@nhanes_fprint]
++ Next steps: deep learning, using fingerprint as outcome instead of predictor
 </div>
 
----
 
-## Future directions 
-
-<br> 
-<div style="font-size: 150%;">
-+ Using CNN/deep learning models 
-+ Using fingerprint as the outcome instead of predictor, investigating change over time or association with health status/mortality 
-</div>
 ---
 
 ## Thank you!
