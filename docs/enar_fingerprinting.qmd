@@ -1208,9 +1208,9 @@ s1_dens %>% mutate(id = "Person A") %>%
 
 
 
-### The method works really well (when we know people are walking)
+### The method works really well 
 
-<div style="font-size: 125%;">
+<div style="font-size: 150%;">
 
 **32 individuals, 6 minutes of walking each**
 
@@ -1223,9 +1223,9 @@ s1_dens %>% mutate(id = "Person A") %>%
 
 ---
 
-### The method works really well (when we know people are walking)
+### The method works really well 
 
-<div style="font-size: 125%;">
+<div style="font-size: 150%;">
 
 **32 individuals, 6 minutes of walking each**
 
@@ -1237,9 +1237,33 @@ s1_dens %>% mutate(id = "Person A") %>%
 
 
 
-+ Train and test on session 1
-  + 93\% rank-1 accuracy
+93\% rank-1 accuracy
 [@Koffman2024]
+
+</div>
+
+
+---
+
+### The method works really well
+
+<div style="font-size: 150%;">
+
+**32 individuals, 6 minutes of walking each**
+
+100\% rank-1 accuracy 
+[@Koffman2023]
+
+
+**153 individuals, 3 minutes of walking each**
+
+
+
+93\% rank-1 accuracy
+[@Koffman2024]
+
+
+<span style="color:#F56600;"> But...we know when people are walking </span>
 
 </div>
 
@@ -1268,18 +1292,37 @@ nh_img_plot +
 
 <div style="font-size: 150%;">
 
-**Process outline**
+**Process**
 
 ::: {.incremental}
 + Use algorithm to find walking 
 + Partition data into train/test 
 + Fit models 
 :::
+
+---
+
+## Walking fingerprinting in NHANES 
+
+<div style="font-size: 150%;">
+
+**Process**
+
+
++ Use algorithm to find walking 
++ Partition data into train/test 
++ Fit models 
+
+
+**Spoiler alert**: the models perform worse (1-41\% rank-1 accuracy)
+
+*Why*? 
 </div> 
 
 ---
 
-### Use algorithms to identify walking 
+
+### Walking identification 
 
 </br> 
 
@@ -1325,7 +1368,7 @@ stepcount::stepcount(file = sample_data, model_type = "ssl")
 
 ---
 
-### Use algorithms to identify walking 
+### Walking identification
 
 ```{r walking bouts}
 #| cache: true 
@@ -1419,28 +1462,27 @@ p2
 
 ---
 
-### Use algorithms to identify walking 
+### Walking identification results comparison
 
-```{r wb2}
-#| cache: true
-p2 + 
-  geom_label(data = tibble(method = "ADEPT", total = 10),
-             aes(x = total, y = 4000, label = "85% of participants have at least\n3 minutes of ADEPT-identified walking"), color = "#F56600", size = 5, inherit.aes = FALSE)
+More specific algorithm is better
 
-```
+```{r algo res}
+#| cache: true 
+# for n = 100, show boxplots of sc vs. adept 
 
----
+ad_100 = read_rds(here::here("results", "prediction_res_100.rds"))
+sc_100 = read_rds(here::here("results", "prediction_res_scs_100.rds"))
 
-### Use algorithms to identify walking 
-
-```{r wb3}
-#| cache: true
-p2 + 
-  geom_label(data = tibble(method = "ADEPT", total = 10),
-             aes(x = total, y = 4000, label = "85% of participants have at least\n3 minutes of ADEPT-identified walking"), color = "#F56600", size = 5, inherit.aes = FALSE) +
-  geom_label(data = tibble(method = "stepcount", total = 30),
-             aes(x = total, y = 1000, label = "98% of participants have at least\n30 minutes of stepcount-identified walking"), color = "#F56600", size = 5, inherit.aes = FALSE) 
-
+ad_100 %>% 
+  mutate(algorithm = "ADEPT") %>% 
+  bind_rows(sc_100 %>% mutate(algorithm = "stepcount")) %>% 
+  ggplot(aes(x = algorithm, y = rank1, fill = algorithm)) +
+  geom_boxplot(outlier.shape = NA) + 
+  geom_jitter(width = .1, size = .5, alpha = 0.5) +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
+  scale_fill_manual(values = c("#A45C98", "#008767")) +
+  theme(legend.position = "none") + 
+  labs(x = "Algorithm", y = "Rank 1 Accuracy (%)", title = "ADEPT vs. stepcount", subtitle = "3 min of data per ppt, subgroups of n = 100, random train/test") 
 ```
 
 ---
@@ -1515,25 +1557,35 @@ p
 
 
 
-### Fit models
+### Train/test partition results comparison
 
-<div style="font-size: 150%;">
+Temporal setting is harder
 
-**How important is... ?**
-
-::: {.incremental}
-+ Sample size
-+ Choice of walking identification algorithm 
-+ Amount of training data
-+ Paradigm for train/test partition 
-+ Model choice 
+```{r tt res}
+#| cache: true 
 
 
-::: 
+# random vs temporal boxplots 
+ad_100 = read_rds(here::here("results", "prediction_res_100.rds"))
+ad_100t = read_rds(here::here("results", "prediction_res_temporal2_100.rds"))
 
-</div> 
+ad_100 %>% 
+  mutate(len = "Random") %>% 
+  bind_rows(ad_100t %>% mutate(len = "Temporal")) %>% 
+  ggplot(aes(x = len, y = rank1, fill = len)) +
+  geom_boxplot(outlier.shape = NA) + 
+  geom_jitter(width = .1, size = .5, alpha = 0.5) +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
+  scale_fill_manual(values = c("#CBA052", "#F56600")) +
+  theme(legend.position = "none") + 
+  labs(x = "Train/test paradigm", y = "Rank 1 Accuracy (%)", title = "Random vs. temporal", subtitle = "ADEPT, subgroups of n = 100, 3 min of data per ppt.") 
+
+```
 
 ---
+
+
+
 
 ### Sample size 
 
@@ -1620,30 +1672,7 @@ p
 
 ---
 
-### Algorithm 
 
-More specific algorithm is better
-
-```{r algo res}
-#| cache: true 
-# for n = 100, show boxplots of sc vs. adept 
-
-ad_100 = read_rds(here::here("results", "prediction_res_100.rds"))
-sc_100 = read_rds(here::here("results", "prediction_res_scs_100.rds"))
-
-ad_100 %>% 
-  mutate(algorithm = "ADEPT") %>% 
-  bind_rows(sc_100 %>% mutate(algorithm = "stepcount")) %>% 
-  ggplot(aes(x = algorithm, y = rank1, fill = algorithm)) +
-  geom_boxplot(outlier.shape = NA) + 
-  geom_jitter(width = .1, size = .5, alpha = 0.5) +
-  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
-  scale_fill_manual(values = c("#A45C98", "#008767")) +
-  theme(legend.position = "none") + 
-  labs(x = "Algorithm", y = "Rank 1 Accuracy (%)", title = "ADEPT vs. stepcount", subtitle = "3 min of data per ppt, subgroups of n = 100, random train/test") 
-```
-
----
 
 ### Amount of training data 
 
@@ -1671,32 +1700,6 @@ ad_100 %>%
 # for n = 100, show boxplots for 3 vs. 30 min, ADEPT only 
 ```
 
----
-
-### Train/test partition 
-
-Temporal setting is harder
-
-```{r tt res}
-#| cache: true 
-
-
-# random vs temporal boxplots 
-ad_100 = read_rds(here::here("results", "prediction_res_100.rds"))
-ad_100t = read_rds(here::here("results", "prediction_res_temporal2_100.rds"))
-
-ad_100 %>% 
-  mutate(len = "Random") %>% 
-  bind_rows(ad_100t %>% mutate(len = "Temporal")) %>% 
-  ggplot(aes(x = len, y = rank1, fill = len)) +
-  geom_boxplot(outlier.shape = NA) + 
-  geom_jitter(width = .1, size = .5, alpha = 0.5) +
-  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
-  scale_fill_manual(values = c("#CBA052", "#F56600")) +
-  theme(legend.position = "none") + 
-  labs(x = "Train/test paradigm", y = "Rank 1 Accuracy (%)", title = "Random vs. temporal", subtitle = "ADEPT, subgroups of n = 100, 3 min of data per ppt.") 
-
-```
 
 ---
 
@@ -1735,7 +1738,7 @@ res_500 = ad_500 %>%
   mutate(n = "n = 500") %>% 
   mutate(rank1 = rank1 / 500 * 100) 
 
-res_100 %>% 
+px = res_100 %>% 
   bind_rows(res_500) %>% 
   ggplot(aes(x = len, y = rank1, fill = len)) +
   geom_boxplot(outlier.shape = NA) + 
@@ -1745,6 +1748,15 @@ res_100 %>%
   scale_fill_manual(values = c("#A45C98", "#86C8BC", "#F1C400")) +
   theme(legend.position = "none") + 
   labs(x = "Model", y = "Rank 1 Accuracy (%)", title = "Model choices", subtitle = "ADEPT, 3 min of data per ppt.") 
+
+res_500 %>% 
+  ggplot(aes(x = len, y = rank1, fill = len)) +
+  geom_boxplot(outlier.shape = NA) + 
+  geom_jitter(width = .1, size = .5, alpha = 0.5) +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
+  scale_fill_manual(values = c("#A45C98", "#86C8BC", "#F1C400")) +
+  theme(legend.position = "none") + 
+  labs(x = "Model", y = "Rank 1 Accuracy (%)", title = "Model choices", subtitle = "ADEPT, subgroups of n = 500, 3 min of data per ppt.") 
 
 ```
 
@@ -1840,7 +1852,7 @@ res_100 %>%
     </tr>
   </tbody>
   <caption>
-    Rank 1 and rank 1% accuracies of different model types on the entire population (n=13367)
+    Rank 1 and rank 1% accuracies of different model types on the entire population
   </caption>
 </table>
 
