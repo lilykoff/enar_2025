@@ -1208,7 +1208,7 @@ s1_dens %>% mutate(id = "Person A") %>%
 
 
 
-### The method works really well when we know people are walking
+### The method works really well (when we know people are walking)
 
 <div style="font-size: 125%;">
 
@@ -1223,7 +1223,7 @@ s1_dens %>% mutate(id = "Person A") %>%
 
 ---
 
-### The method works really well when we know people are walking
+### The method works really well (when we know people are walking)
 
 <div style="font-size: 125%;">
 
@@ -1242,6 +1242,9 @@ s1_dens %>% mutate(id = "Person A") %>%
 [@Koffman2024]
 
 </div>
+
+
+
 
 # Will the method work in a large, unlabeled data set?
 
