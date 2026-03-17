@@ -738,7 +738,6 @@ final_plot = nh_img_plot +
 ```
 
 
-# Can we identify someone from their walking pattern measured by a wrist-worn accelerometer?
   
 
 
@@ -1607,7 +1606,7 @@ p = all_logistic %>%
   geom_label(data = lab_df %>% filter(paradigm == "Random"),
              aes(x = n, y = value, label = metric_lab, color = metric),
              hjust = -.5, size = 4) +
-  labs(x = "Number of Participants (x100)", y = "Median Accuracy",
+  labs(x = "Number of Participants (x100)", y = "Median Accuracy (%)",
        title = "Accuracy by sample size",
        subtitle = "ADEPT, 3 min of data per ppt, random train/test") +
   scale_color_manual(values = c("#F56600", "#CBA052"),
@@ -1638,7 +1637,7 @@ ad_100 %>%
   scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
   scale_fill_manual(values = c("#A45C98", "#008767")) +
   theme(legend.position = "none") + 
-  labs(x = "Algorithm", y = "Rank 1 Accuracy", title = "ADEPT vs. stepcount", subtitle = "3 min of data per ppt, subgroups of n = 100, random train/test") 
+  labs(x = "Algorithm", y = "Rank 1 Accuracy (%)", title = "ADEPT vs. stepcount", subtitle = "3 min of data per ppt, subgroups of n = 100, random train/test") 
 ```
 
 ---
@@ -1664,7 +1663,7 @@ ad_100 %>%
   scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
   scale_fill_manual(values = c("#4E97E0", "#002D72")) +
   theme(legend.position = "none") + 
-  labs(x = "Length of data", y = "Rank 1 Accuracy", title = "3 min vs. 30 min", subtitle = "ADEPT, subgroups of n = 100, random train/test") 
+  labs(x = "Amount of data", y = "Rank 1 Accuracy (%)", title = "3 min vs. 30 min", subtitle = "ADEPT, subgroups of n = 100, random train/test") 
 
 # for n = 100, show boxplots for 3 vs. 30 min, ADEPT only 
 ```
@@ -1692,7 +1691,7 @@ ad_100 %>%
   scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
   scale_fill_manual(values = c("#CBA052", "#F56600")) +
   theme(legend.position = "none") + 
-  labs(x = "Train/test paradigm", y = "Rank 1 Accuracy", title = "Random vs. temporal", subtitle = "ADEPT, subgroups of n = 100, 3 min of data per ppt.") 
+  labs(x = "Train/test paradigm", y = "Rank 1 Accuracy (%)", title = "Random vs. temporal", subtitle = "ADEPT, subgroups of n = 100, 3 min of data per ppt.") 
 
 ```
 
@@ -1742,7 +1741,7 @@ res_100 %>%
   scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
   scale_fill_manual(values = c("#A45C98", "#86C8BC", "#F1C400")) +
   theme(legend.position = "none") + 
-  labs(x = "Model", y = "Rank 1 Accuracy", title = "Model choices", subtitle = "ADEPT, 3 min of data per ppt.") 
+  labs(x = "Model", y = "Rank 1 Accuracy (%)", title = "Model choices", subtitle = "ADEPT, 3 min of data per ppt.") 
 
 ```
 
